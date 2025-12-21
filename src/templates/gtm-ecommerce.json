@@ -1,0 +1,245 @@
+{
+  "templateName": "E-commerce",
+  "version": "1.0.0",
+  "description": "GA4 + tracking e-commerce (view_item, add_to_cart, purchase)",
+  "variables": [
+    {
+      "name": "DLV - ecommerce",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "ecommerce" }
+      ]
+    },
+    {
+      "name": "DLV - ecommerce.items",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "ecommerce.items" }
+      ]
+    },
+    {
+      "name": "DLV - ecommerce.value",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "ecommerce.value" }
+      ]
+    },
+    {
+      "name": "DLV - ecommerce.currency",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "ecommerce.currency" }
+      ]
+    },
+    {
+      "name": "DLV - ecommerce.transaction_id",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "ecommerce.transaction_id" }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "name": "All Pages",
+      "type": "pageview"
+    },
+    {
+      "name": "Event - view_item",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "view_item" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Event - add_to_cart",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "add_to_cart" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Event - begin_checkout",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "begin_checkout" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Event - purchase",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "purchase" }
+          ]
+        }
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "GA4 - Configuration - {{PROJECT_NAME}}",
+      "type": "gaawc",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "measurementId", "value": "{{GA4_MEASUREMENT_ID}}" }
+      ],
+      "firingTriggerName": "All Pages"
+    },
+    {
+      "name": "GA4 - Event - View Item",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "view_item" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" },
+        {
+          "type": "LIST",
+          "key": "eventParameters",
+          "list": [
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "items" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.items}}" }
+              ]
+            }
+          ]
+        }
+      ],
+      "firingTriggerName": "Event - view_item"
+    },
+    {
+      "name": "GA4 - Event - Add to Cart",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "add_to_cart" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" },
+        {
+          "type": "LIST",
+          "key": "eventParameters",
+          "list": [
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "items" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.items}}" }
+              ]
+            },
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "value" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.value}}" }
+              ]
+            },
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "currency" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.currency}}" }
+              ]
+            }
+          ]
+        }
+      ],
+      "firingTriggerName": "Event - add_to_cart"
+    },
+    {
+      "name": "GA4 - Event - Begin Checkout",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "begin_checkout" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" },
+        {
+          "type": "LIST",
+          "key": "eventParameters",
+          "list": [
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "items" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.items}}" }
+              ]
+            },
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "value" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.value}}" }
+              ]
+            }
+          ]
+        }
+      ],
+      "firingTriggerName": "Event - begin_checkout"
+    },
+    {
+      "name": "GA4 - Event - Purchase",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "purchase" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" },
+        {
+          "type": "LIST",
+          "key": "eventParameters",
+          "list": [
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "transaction_id" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.transaction_id}}" }
+              ]
+            },
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "items" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.items}}" }
+              ]
+            },
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "value" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.value}}" }
+              ]
+            },
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "currency" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - ecommerce.currency}}" }
+              ]
+            }
+          ]
+        }
+      ],
+      "firingTriggerName": "Event - purchase"
+    }
+  ]
+}

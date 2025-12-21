@@ -1,0 +1,22 @@
+{
+  "templateName": "Minimal",
+  "version": "1.0.0",
+  "description": "GA4 pageviews uniquement",
+  "variables": [],
+  "triggers": [
+    {
+      "name": "All Pages",
+      "type": "pageview"
+    }
+  ],
+  "tags": [
+    {
+      "name": "GA4 - Configuration - {{PROJECT_NAME}}",
+      "type": "gaawc",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "measurementId", "value": "{{GA4_MEASUREMENT_ID}}" }
+      ],
+      "firingTriggerName": "All Pages"
+    }
+  ]
+}

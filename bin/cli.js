@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+import { Command } from 'commander';
+import { interactiveMode } from '../src/commands/interactive.js';
+import { runAudit } from '../src/commands/audit.js';
+import { runDeploy } from '../src/commands/deploy.js';
+import { runInit } from '../src/commands/init.js';
+import { runStatus } from '../src/commands/status.js';
+import { runContinue } from '../src/commands/continue.js';
+import { runSync } from '../src/commands/sync.js';
+
+const program = new Command();
+
+program
+  .name('google-setup')
+  .description('Audit & Déploiement automatique Google Analytics')
+  .version('2.0.0');
+
+program
+  .command('init')
+  .description('Configurer les credentials Google API')
+  .action(runInit);
+
+program
+  .command('audit')
+  .description('Auditer un ou plusieurs domaines')
+  .option('-d, --domains <domains>', 'Domaines séparés par des virgules')
+  .option('-o, --output <type>', 'Format de sortie (console|json)', 'console')
+  .action(runAudit);
+
+program
+  .command('deploy')
+  .description('Déployer la configuration sur un domaine')
+  .option('-d, --domain <domain>', 'Domaine cible')
+  .option('-n, --name <name>', 'Nom du projet')
+  .option('-t, --template <template>', 'Template GTM (minimal|lead-gen|ecommerce)', 'lead-gen')
+  .option('--auto', 'Mode automatique sans confirmation')
+  .action(runDeploy);
+
+program
+  .command('status')
+  .description('Voir la checklist de progression KPI')
+  .option('-d, --domain <domain>', 'Domaine à analyser')
+  .action(runStatus);
+
+program
+  .command('continue')
+  .description('Continuer le déploiement automatiquement')
+  .option('-d, --domain <domain>', 'Domaine cible')
+  .option('-t, --template <template>', 'Template GTM (minimal|lead-gen|ecommerce)', 'lead-gen')
+  .option('--auto', 'Mode automatique sans confirmation')
+  .action(runContinue);
+
+program
+  .command('sync')
+  .description('Synchroniser le projet local avec GTM (dataLayer → triggers/variables)')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .option('-d, --domain <domain>', 'Domaine cible')
+  .option('--auto', 'Mode automatique sans confirmation')
+  .action(runSync);
+
+// Mode interactif par défaut si aucun argument
+if (process.argv.length === 2) {
+  interactiveMode();
+} else {
+  program.parse();
+}

@@ -1,0 +1,176 @@
+{
+  "templateName": "Lead Generation",
+  "version": "1.0.0",
+  "description": "GA4 + tracking CTA, formulaires, appels téléphone",
+  "variables": [
+    {
+      "name": "DLV - cta_location",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "cta_location" }
+      ]
+    },
+    {
+      "name": "DLV - form_name",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "form_name" }
+      ]
+    },
+    {
+      "name": "DLV - lead_value",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "lead_value" }
+      ]
+    },
+    {
+      "name": "DLV - page_type",
+      "type": "v",
+      "parameter": [
+        { "type": "INTEGER", "key": "dataLayerVersion", "value": "2" },
+        { "type": "TEMPLATE", "key": "name", "value": "page_type" }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "name": "All Pages",
+      "type": "pageview"
+    },
+    {
+      "name": "Event - clic_cta",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "clic_cta" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Event - form_submit",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "form_submit" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Event - phone_click",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "phone_click" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Event - email_click",
+      "type": "customEvent",
+      "customEventFilter": [
+        {
+          "type": "equals",
+          "parameter": [
+            { "type": "template", "key": "arg0", "value": "{{_event}}" },
+            { "type": "template", "key": "arg1", "value": "email_click" }
+          ]
+        }
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "GA4 - Configuration - {{PROJECT_NAME}}",
+      "type": "gaawc",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "measurementId", "value": "{{GA4_MEASUREMENT_ID}}" }
+      ],
+      "firingTriggerName": "All Pages"
+    },
+    {
+      "name": "GA4 - Event - CTA Click",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "clic_cta" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" },
+        {
+          "type": "LIST",
+          "key": "eventParameters",
+          "list": [
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "cta_location" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - cta_location}}" }
+              ]
+            }
+          ]
+        }
+      ],
+      "firingTriggerName": "Event - clic_cta"
+    },
+    {
+      "name": "GA4 - Event - Form Submit",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "generate_lead" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" },
+        {
+          "type": "LIST",
+          "key": "eventParameters",
+          "list": [
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "form_name" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - form_name}}" }
+              ]
+            },
+            {
+              "type": "MAP",
+              "map": [
+                { "type": "TEMPLATE", "key": "name", "value": "value" },
+                { "type": "TEMPLATE", "key": "value", "value": "{{DLV - lead_value}}" }
+              ]
+            }
+          ]
+        }
+      ],
+      "firingTriggerName": "Event - form_submit"
+    },
+    {
+      "name": "GA4 - Event - Phone Click",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "phone_click" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" }
+      ],
+      "firingTriggerName": "Event - phone_click"
+    },
+    {
+      "name": "GA4 - Event - Email Click",
+      "type": "gaawe",
+      "parameter": [
+        { "type": "TEMPLATE", "key": "eventName", "value": "email_click" },
+        { "type": "TEMPLATE", "key": "measurementIdOverride", "value": "{{GA4_MEASUREMENT_ID}}" }
+      ],
+      "firingTriggerName": "Event - email_click"
+    }
+  ]
+}

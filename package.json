@@ -1,0 +1,41 @@
+{
+  "name": "google-setup",
+  "version": "2.0.0",
+  "description": "Audit & Déploiement automatique Google Analytics (GTM, GA4, Search Console)",
+  "type": "module",
+  "bin": {
+    "google-setup": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node bin/cli.js",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "keywords": [
+    "google-analytics",
+    "gtm",
+    "ga4",
+    "search-console",
+    "audit",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "boxen": "^7.0.0",
+    "chalk": "^5.3.0",
+    "cheerio": "^1.0.0",
+    "commander": "^11.0.0",
+    "figlet": "^1.7.0",
+    "glob": "^13.0.0",
+    "googleapis": "^126.0.0",
+    "inquirer": "^9.0.0",
+    "ora": "^7.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

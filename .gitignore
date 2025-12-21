@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Credentials (NEVER commit these)
+.google-credentials.json
+.google-setup-config.json
+config/.google-credentials.json
+config/.google-setup-config.json
+*.iam.gserviceaccount.com.json
+premium-archery-*.json
+*-g6-*.json
+
+# Reports (optional)
+reports/*.json
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
