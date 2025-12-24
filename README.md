@@ -1,37 +1,70 @@
 # Google Setup CLI v2.0
 
-**Automatisez la configuration de vos outils Google Analytics en quelques minutes.**
+```
+   ____                   _        ____       _
+  / ___| ___   ___   __ _| | ___  / ___|  ___| |_ _   _ _ __
+ | |  _ / _ \ / _ \ / _` | |/ _ \ \___ \ / _ \ __| | | | '_ \
+ | |_| | (_) | (_) | (_| | |  __/  ___) |  __/ |_| |_| | |_) |
+  \____|\___/ \___/ \__, |_|\___| |____/ \___|\__|\__,_| .__/
+                    |___/                              |_|
+```
 
-Un outil en ligne de commande qui configure automatiquement GTM, GA4, Search Console et Hotjar pour vos sites web.
+**Automatisez la configuration complète de vos outils Google Analytics.**
+
+GTM + GA4 + Search Console + Tracking Code — en quelques commandes.
 
 ---
 
 ## Table des matières
 
-- [Pourquoi cet outil ?](#pourquoi-cet-outil-)
-- [Installation rapide](#installation-rapide)
-- [Configuration initiale (5 min)](#configuration-initiale-5-min)
-- [Utilisation](#utilisation)
-- [Commandes disponibles](#commandes-disponibles)
-- [Templates de tracking](#templates-de-tracking)
-- [Intégration dans votre site](#intégration-dans-votre-site)
+- [Vue d'ensemble](#vue-densemble)
+- [Installation](#installation)
+- [Configuration initiale](#configuration-initiale)
+- [Workflows par cas d'usage](#workflows-par-cas-dusage)
+- [Toutes les commandes](#toutes-les-commandes)
+- [Structure des fichiers générés](#structure-des-fichiers-générés)
 - [FAQ](#faq)
-- [Développement](#développement)
 
 ---
 
-## Pourquoi cet outil ?
+## Vue d'ensemble
 
-Configurer correctement Google Tag Manager, GA4 et les conversions prend du temps et est source d'erreurs. Cet outil :
+### Qu'est-ce que cet outil fait ?
 
-- **Audite** votre configuration existante et donne un score
-- **Déploie** automatiquement GTM + GA4 + events
-- **Synchronise** vos dataLayer locaux avec GTM
-- **Génère** les fichiers de tracking prêts à l'emploi
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         GOOGLE SETUP CLI                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  📋 AUDIT          →  Analyse votre config existante (score A+ → F) │
+│  🚀 DEPLOY         →  Crée GTM + GA4 + balises from scratch         │
+│  📄 INIT-TRACKING  →  Génère le plan de taggage (YAML + MD)         │
+│  ⚡ GENERATE       →  Crée gtm-tracking.js depuis le YAML           │
+│  🔄 SYNC           →  Synchronise votre code local avec GTM         │
+│  📊 STATUS         →  Affiche la progression et les manques         │
+│  ▶️ CONTINUE       →  Reprend le déploiement là où il s'est arrêté  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Pourquoi utiliser cet outil ?
+
+| Problème | Solution |
+|----------|----------|
+| Configuration GTM manuelle longue et source d'erreurs | Déploiement automatisé en 1 commande |
+| Pas de documentation tracking | Génération de tracking-plan.yml + .md |
+| Code tracking à écrire à la main | Auto-génération de gtm-tracking.js |
+| Synchronisation code ↔ GTM manuelle | Commande `sync` automatique |
+| Pas de vision de ce qui manque | Checklist interactive avec `status` |
 
 ---
 
-## Installation rapide
+## Installation
+
+### Prérequis
+
+- Node.js 18+
+- npm
 
 ### Option 1 : Installation globale (recommandé)
 
@@ -39,7 +72,7 @@ Configurer correctement Google Tag Manager, GA4 et les conversions prend du temp
 npm install -g google-setup
 ```
 
-### Option 2 : Installation locale (développement)
+### Option 2 : Depuis les sources
 
 ```bash
 git clone https://github.com/annubis-knight/Google_Setup_CLI.git
@@ -48,66 +81,74 @@ npm install
 npm link
 ```
 
-Vérifiez l'installation :
+### Vérification
 
 ```bash
 google-setup --version
-# Devrait afficher : 2.0.0
+# → 2.0.0
 ```
 
 ---
 
-## Configuration initiale (5 min)
-
-Avant d'utiliser l'outil, vous devez configurer l'accès aux APIs Google.
+## Configuration initiale
 
 ### Étape 1 : Créer un projet Google Cloud
 
-1. Allez sur [Google Cloud Console](https://console.cloud.google.com)
-2. Cliquez sur **"Créer un projet"**
-3. Donnez un nom (ex: "Mon Setup Analytics")
-4. Cliquez sur **"Créer"**
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Google Cloud Console                                        │
+│  https://console.cloud.google.com                            │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  1. Cliquez "Créer un projet"                                │
+│  2. Nom : "Mon Analytics Automation"                         │
+│  3. Cliquez "Créer"                                          │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
 
-### Étape 2 : Activer les APIs nécessaires
+### Étape 2 : Activer les APIs
 
-Dans votre projet Google Cloud, activez ces 4 APIs :
+Dans **APIs et services > Bibliothèque**, activez :
 
-1. Allez dans **"APIs et services" > "Bibliothèque"**
-2. Recherchez et activez :
-   - `Tag Manager API`
-   - `Google Analytics Admin API`
-   - `Search Console API`
-   - `Site Verification API`
-
-> **Astuce** : Cliquez sur chaque API puis sur le bouton bleu "Activer"
+```
+☑ Tag Manager API
+☑ Google Analytics Admin API
+☑ Search Console API
+☑ Site Verification API
+```
 
 ### Étape 3 : Créer un Service Account
 
-1. Allez dans **"APIs et services" > "Identifiants"**
-2. Cliquez sur **"Créer des identifiants" > "Compte de service"**
-3. Donnez un nom (ex: "google-setup-bot")
-4. Cliquez sur **"Créer et continuer"** (ignorez les rôles optionnels)
-5. Cliquez sur le compte créé
-6. Onglet **"Clés" > "Ajouter une clé" > "Créer une clé"**
-7. Choisissez **JSON** et téléchargez le fichier
+```
+┌──────────────────────────────────────────────────────────────┐
+│  APIs et services > Identifiants > Créer > Compte de service │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Nom : google-setup-bot                                      │
+│  ↓                                                           │
+│  Cliquez sur le compte créé                                  │
+│  ↓                                                           │
+│  Onglet "Clés" > "Ajouter une clé" > "Créer une clé" > JSON  │
+│  ↓                                                           │
+│  📥 Téléchargez le fichier .json (gardez-le en sécurité!)    │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
 
-> **Important** : Gardez ce fichier JSON en sécurité, il contient vos credentials.
+### Étape 4 : Donner les permissions
 
-### Étape 4 : Donner les permissions au Service Account
+Copiez l'email du Service Account : `xxx@xxx.iam.gserviceaccount.com`
 
-Copiez l'email du Service Account (ressemble à : `mon-bot@mon-projet.iam.gserviceaccount.com`)
+**Dans GTM** ([tagmanager.google.com](https://tagmanager.google.com)) :
+```
+Admin > Gestion des utilisateurs > + > Coller l'email > Droits "Publier"
+```
 
-**Dans Google Tag Manager :**
-1. Ouvrez [tagmanager.google.com](https://tagmanager.google.com)
-2. Allez dans **Admin > Gestion des utilisateurs**
-3. Cliquez sur **"+"** et ajoutez l'email du Service Account
-4. Donnez les droits **"Publier"**
-
-**Dans Google Analytics :**
-1. Ouvrez [analytics.google.com](https://analytics.google.com)
-2. Allez dans **Admin > Gestion des accès au compte**
-3. Cliquez sur **"+"** et ajoutez l'email du Service Account
-4. Donnez les droits **"Éditeur"**
+**Dans GA4** ([analytics.google.com](https://analytics.google.com)) :
+```
+Admin > Gestion des accès > + > Coller l'email > Droits "Éditeur"
+```
 
 ### Étape 5 : Initialiser l'outil
 
@@ -115,46 +156,127 @@ Copiez l'email du Service Account (ressemble à : `mon-bot@mon-projet.iam.gservi
 google-setup init
 ```
 
-L'assistant vous demandera :
-- Le chemin vers votre fichier JSON (credentials)
-- Votre GTM Account ID
-- Votre GA4 Account ID
-
-> **Où trouver les Account IDs ?**
-> - **GTM** : Dans l'URL de GTM → `accounts/XXXXXX/containers/...` → XXXXXX est votre ID
-> - **GA4** : Admin > Détails du compte → L'ID est affiché
-
----
-
-## Utilisation
-
-### Mode interactif (le plus simple)
-
-```bash
-google-setup
 ```
-
-Un menu interactif s'affiche avec toutes les options disponibles.
-
-### Mode commande
-
-```bash
-google-setup <commande> [options]
+┌──────────────────────────────────────────────────────────────┐
+│  🔧 Configuration de Google Setup CLI                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ? Chemin du fichier credentials JSON :                      │
+│    → /path/to/mon-projet-xxxxx.json                          │
+│                                                              │
+│  ? GTM Account ID :                                          │
+│    → 1234567890  (visible dans l'URL GTM)                    │
+│                                                              │
+│  ? GA4 Account ID :                                          │
+│    → 9876543210  (Admin > Détails du compte)                 │
+│                                                              │
+│  ✅ Configuration sauvegardée !                              │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Commandes disponibles
+## Workflows par cas d'usage
 
-### `status` - Voir la progression
+### Cas 1 : Nouveau projet — Déploiement complet
 
-Affiche une checklist de ce qui est configuré et ce qui manque.
+**Situation** : Vous avez un nouveau site sans aucun tracking.
+
+```bash
+# 1. Depuis le dossier de votre projet web
+cd /mon-nouveau-projet
+
+# 2. Déployer tout automatiquement
+google-setup deploy -d "mon-site.fr" -n "Mon Site" -t lead-gen
+
+# 3. Intégrer les fichiers générés dans votre HTML
+```
+
+**Ce qui est créé :**
+- Container GTM (GTM-XXXXXX)
+- Propriété GA4 (G-XXXXXXXXXX)
+- Balise GA4 Config
+- Triggers et tags selon le template
+
+---
+
+### Cas 2 : Projet existant — Créer le plan de taggage
+
+**Situation** : Vous avez un projet et voulez documenter/générer le tracking.
+
+```bash
+# 1. Depuis le dossier de votre projet
+cd /mon-projet-existant
+
+# 2. Générer le plan de taggage
+google-setup init-tracking
+
+# 3. Éditer le YAML pour activer les events voulus
+#    → Ouvrez tracking/tracking-plan.yml
+#    → Mettez enabled: true sur les events à utiliser
+
+# 4. Générer le code JavaScript
+google-setup generate-tracking --force
+
+# 5. Le fichier gtm-tracking.js est prêt à l'emploi !
+```
+
+**Fichiers générés :**
+
+```
+mon-projet/
+├── tracking/
+│   ├── tracking-plan.yml    ← Configuration (source de vérité)
+│   └── tracking-plan.md     ← Documentation lisible
+└── gtm-tracking.js          ← Code JS prêt à utiliser
+```
+
+---
+
+### Cas 3 : Synchroniser le code local avec GTM
+
+**Situation** : Vous avez un fichier tracking.js local et voulez créer les triggers GTM correspondants.
+
+```bash
+# 1. Depuis le dossier contenant vos fichiers tracking
+cd /mon-projet
+
+# 2. Synchroniser avec GTM
+google-setup sync -d "mon-site.fr"
+```
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  🔄 Synchronisation Local → GTM                              │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  📁 Fichier trouvé: ./src/gtm-tracking.js                    │
+│                                                              │
+│  Events détectés:                                            │
+│    • clic_cta                                                │
+│    • form_submit                                             │
+│    • phone_click                                             │
+│    • scroll_depth                                            │
+│                                                              │
+│  ✅ Trigger créé: EV - clic_cta                              │
+│  ✅ Trigger créé: EV - form_submit                           │
+│  ✅ Variable créée: DLV - cta_location                       │
+│  ✅ Tag GA4 créé: GA4 - EV - CTA Click                       │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Cas 4 : Voir ce qui manque
+
+**Situation** : Vous voulez savoir où en est la configuration d'un site.
 
 ```bash
 google-setup status -d "mon-site.fr"
 ```
 
-**Exemple de sortie :**
 ```
 ═══════════════════════════════════════════════════════════════════════
   CHECKLIST - mon-site.fr
@@ -163,25 +285,34 @@ google-setup status -d "mon-site.fr"
 ✅ 1. Google Analytics 4 (100%)
    ✓ Propriété GA4 existe
    ✓ Data Stream configuré
+   ✓ Measurement ID récupéré
 
 ✅ 2. Google Tag Manager (100%)
-   ✓ Conteneur GTM existe
-   ✓ Balise GA4 Config
+   ✓ Conteneur GTM existe (GTM-XXXXXXX)
+   ✓ Balise GA4 Config présente
 
-⏳ 3. DataLayer Custom (33%)
-   ✗ Variables DataLayer (min 5)
-   ✗ Triggers custom events (min 3)
+⏳ 3. DataLayer Custom (60%)
+   ✓ Variables DataLayer (8)
+   ✓ Triggers custom events (5)
+   ✗ Tag GA4 pour scroll_depth
+   ✗ Tag GA4 pour video_play
+
+⏳ 4. Search Console (50%)
+   ✓ Site vérifié
+   ✗ Sitemap soumis
 
 ───────────────────────────────────────────────────────────────────────
-🎯 Progression globale : ████████████░░░░░░░░ 60%
+🎯 Progression globale : ████████████████░░░░ 78%  [Grade: B]
 ───────────────────────────────────────────────────────────────────────
+
+💡 Conseil: Lancez "google-setup continue" pour compléter automatiquement
 ```
 
 ---
 
-### `continue` - Reprendre le déploiement
+### Cas 5 : Continuer un déploiement incomplet
 
-Détecte automatiquement ce qui manque et le déploie.
+**Situation** : Un déploiement a été interrompu ou vous voulez compléter ce qui manque.
 
 ```bash
 # Mode interactif (confirmation à chaque étape)
@@ -191,126 +322,174 @@ google-setup continue -d "mon-site.fr"
 google-setup continue -d "mon-site.fr" --auto
 ```
 
-> **Intelligent** : Ne recrée jamais ce qui existe déjà.
-
 ---
 
-### `sync` - Synchroniser local → GTM
+### Cas 6 : Auditer plusieurs sites
 
-Lit vos fichiers de tracking locaux et crée les triggers/variables correspondants dans GTM.
-
-```bash
-google-setup sync -d "mon-site.fr"
-```
-
-**Ce que fait sync :**
-
-1. Scanne votre projet pour trouver les fichiers tracking (`tracking.js`, `gtm-tracking.js`, etc.)
-2. Extrait les events `dataLayer.push({ event: 'xxx' })`
-3. Compare avec ce qui existe dans GTM
-4. Crée automatiquement :
-   - Les **triggers** (ex: `Event - clic_cta`)
-   - Les **variables** DataLayer (ex: `DLV - cta_location`)
-   - Les **balises GA4** Event correspondantes
-
-**Fichiers détectés automatiquement :**
-- `**/gtm-head.html`
-- `**/gtm-body.html`
-- `**/tracking.js` / `**/gtm-tracking.js` / `**/datalayer.js`
-
----
-
-### `audit` - Auditer la configuration
-
-Génère un rapport complet avec score.
+**Situation** : Vous gérez plusieurs sites et voulez un état des lieux.
 
 ```bash
-# Un seul site
-google-setup audit -d "mon-site.fr"
-
-# Plusieurs sites
 google-setup audit -d "site1.fr,site2.fr,site3.fr"
 ```
 
-**Score calculé :**
-
-| Outil | Poids |
-|-------|-------|
-| GA4 | 30% |
-| DataLayer | 30% |
-| GTM | 20% |
-| Search Console | 15% |
-| Hotjar | 5% |
-
-**Grades :**
-
-| Score | Grade |
-|-------|-------|
-| 90-100 | A+ |
-| 80-89 | A |
-| 70-79 | B |
-| 60-69 | C |
-| 40-59 | D |
-| 0-39 | F |
-
----
-
-### `deploy` - Déploiement complet
-
-Crée tout de zéro : GTM, GA4, balises, triggers, variables.
-
-```bash
-# Interactif
-google-setup deploy -d "mon-site.fr"
-
-# Avec options
-google-setup deploy -d "mon-site.fr" -n "Mon Site" -t lead-gen
-
-# Automatique
-google-setup deploy -d "mon-site.fr" --auto
+```
+┌─────────────────────────────────────────────────────────────┐
+│  AUDIT MULTI-SITES                                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  site1.fr ............... 92% [A+] ████████████████████░░  │
+│  site2.fr ............... 75% [B]  ███████████████░░░░░░░  │
+│  site3.fr ............... 45% [D]  █████████░░░░░░░░░░░░░  │
+│                                                             │
+│  📊 Moyenne : 71% [B]                                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Templates de tracking
+## Toutes les commandes
 
-Choisissez le template adapté à votre site :
+### Mode interactif
 
-### `minimal` - Sites vitrines simples
+```bash
+google-setup
+```
 
-- GA4 pageviews uniquement
-- Aucun event custom
+Affiche un menu avec toutes les options :
 
-### `lead-gen` - Sites de génération de leads (par défaut)
+```
+   ____                   _        ____       _
+  / ___| ___   ___   __ _| | ___  / ___|  ___| |_ _   _ _ __
+ | |  _ / _ \ / _ \ / _` | |/ _ \ \___ \ / _ \ __| | | | '_ \
+ | |_| | (_) | (_) | (_| | |  __/  ___) |  __/ |_| |_| | |_) |
+  \____|\___/ \___/ \__, |_|\___| |____/ \___|\__|\__,_| .__/
+                    |___/                              |_|
 
-Events inclus :
-- `clic_cta` - Clics sur les boutons d'action
-- `form_submit` - Soumissions de formulaires
-- `phone_click` - Clics sur liens téléphone
-- `email_click` - Clics sur liens email
+Audit & Déploiement automatique Google Analytics
 
-### `ecommerce` - Sites e-commerce
+? Que voulez-vous faire ?
+  📋 Voir la progression d'un site (status)
+  ▶️  Continuer le déploiement (continue)
+  🔄 Synchroniser projet local → GTM (sync)
+  📄 Générer plan de taggage (init-tracking)
+  ⚡ Générer gtm-tracking.js (generate-tracking)
+  🔍 Auditer un ou plusieurs domaines
+  🚀 Déployer from scratch
+  ❌ Quitter
+```
 
-Events inclus :
-- `view_item` - Vue d'un produit
-- `add_to_cart` - Ajout au panier
-- `begin_checkout` - Début de paiement
-- `purchase` - Achat finalisé
+### Référence des commandes
+
+| Commande | Description | Options |
+|----------|-------------|---------|
+| `init` | Configurer les credentials | - |
+| `status` | Voir la checklist | `-d, --domain` |
+| `continue` | Reprendre le déploiement | `-d, --domain` `-t, --template` `--auto` |
+| `sync` | Sync local → GTM | `-p, --path` `-d, --domain` `--auto` |
+| `init-tracking` | Générer YAML + MD | `-p, --path` `-o, --output` `--force` |
+| `generate-tracking` | Générer JS depuis YAML | `-p, --path` `-i, --input` `-o, --output` `--force` |
+| `audit` | Auditer un/plusieurs sites | `-d, --domains` `-o, --output` |
+| `deploy` | Déploiement complet | `-d, --domain` `-n, --name` `-t, --template` `--auto` |
+
+### Templates disponibles
+
+| Template | Events inclus | Cas d'usage |
+|----------|---------------|-------------|
+| `minimal` | Pageviews uniquement | Blog, site vitrine simple |
+| `lead-gen` | CTA, formulaires, téléphone, scroll | Site de génération de leads |
+| `ecommerce` | view_item, add_to_cart, purchase... | Boutique en ligne |
 
 ---
 
-## Intégration dans votre site
+## Structure des fichiers générés
 
-Après un déploiement, vous obtenez ces fichiers :
+### Dans votre projet
 
 ```
 mon-projet/
+├── tracking/
+│   ├── tracking-plan.yml      # Source de vérité (config)
+│   └── tracking-plan.md       # Documentation client
+├── gtm-tracking.js            # Code JS auto-généré
 ├── components/
-│   ├── gtm-head.html    # Script GTM pour <head>
-│   └── gtm-body.html    # Noscript GTM pour <body>
-├── src/
-│   └── tracking.js      # Fonctions de tracking
-└── .google-setup.json   # Config locale
+│   ├── gtm-head.html          # Script GTM pour <head>
+│   └── gtm-body.html          # Noscript pour <body>
+└── .google-setup.json         # Config locale du projet
+```
+
+### Le fichier tracking-plan.yml
+
+```yaml
+project:
+  name: "Mon Site"
+  domain: "mon-site.fr"
+  ga4_measurement_id: "G-XXXXXXXXXX"
+  gtm_container_id: "GTM-XXXXXXX"
+
+events:
+  - id: "cta_click"
+    name: "CTA - Clic"
+    enabled: true              # ← Activer/désactiver ici
+    category: "Lead Generation"
+
+    datalayer:
+      event_name: "clic_cta"
+      params:
+        - name: "cta_location"
+          type: "string"
+          values: ["hero", "footer", "sidebar"]
+
+    ga4:
+      event_name: "clic_cta"
+      conversion: true
+```
+
+### Le fichier gtm-tracking.js généré
+
+```javascript
+/**
+ * GTM Tracking - Mon Site
+ * Généré automatiquement par google-setup-cli
+ */
+
+function pushEvent(eventName, eventData = {}) {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: eventName,
+    ...eventData,
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Fonctions exportées
+export function trackCTA(cta_location) {
+  pushEvent('clic_cta', { cta_location });
+}
+
+export function trackFormSubmit(form_name, lead_value) {
+  pushEvent('form_submit', { form_name, lead_value: lead_value ?? 0 });
+}
+
+export function trackPhoneClick() {
+  pushEvent('phone_click');
+}
+
+// Auto-tracking des liens tel: et mailto:
+export function initAutoTracking() {
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a');
+    if (!link) return;
+    const href = link.getAttribute('href') || '';
+    if (href.startsWith('tel:')) trackPhoneClick();
+    if (href.startsWith('mailto:')) trackEmailClick();
+  });
+}
+
+// Scroll tracking automatique
+export function initScrollTracking() {
+  // Track 25%, 50%, 75%, 100%
+}
 ```
 
 ### Intégration HTML
@@ -319,129 +498,129 @@ mon-projet/
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Copiez le contenu de gtm-head.html ici -->
+  <!-- GTM Head (copier depuis components/gtm-head.html) -->
   <script>(function(w,d,s,l,i){...})(window,document,'script','dataLayer','GTM-XXXXX');</script>
 </head>
 <body>
-  <!-- Copiez le contenu de gtm-body.html ici (juste après <body>) -->
-  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXX"...></iframe></noscript>
+  <!-- GTM Body (juste après <body>) -->
+  <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXX"></iframe></noscript>
 
   <!-- Votre contenu -->
   <button onclick="trackCTA('hero')">Demander un devis</button>
 
-  <!-- Incluez tracking.js avant </body> -->
-  <script src="src/tracking.js"></script>
+  <!-- Avant </body> -->
+  <script type="module">
+    import { initAutoTracking, initScrollTracking } from './gtm-tracking.js';
+    initAutoTracking();
+    initScrollTracking();
+  </script>
 </body>
 </html>
-```
-
-### Utilisation des fonctions (template lead-gen)
-
-```javascript
-// Tracker un clic sur un CTA
-trackCTA('hero');        // hero, sidebar, footer, header...
-
-// Tracker une soumission de formulaire
-trackFormSubmit('contact');
-trackFormSubmit('devis', 100);  // Avec valeur estimée du lead
-
-// Les clics sur tel: et mailto: sont trackés automatiquement
-```
-
-### Utilisation des fonctions (template ecommerce)
-
-```javascript
-// Vue d'un produit
-trackViewItem({
-  item_id: 'SKU123',
-  item_name: 'T-shirt bleu',
-  price: 29.99,
-  currency: 'EUR'
-});
-
-// Ajout au panier
-trackAddToCart({
-  item_id: 'SKU123',
-  item_name: 'T-shirt bleu',
-  price: 29.99,
-  quantity: 2
-});
-
-// Début du checkout
-trackBeginCheckout(cartItems, 59.98, 'EUR');
-
-// Achat finalisé
-trackPurchase('ORDER-456', cartItems, 59.98, 'EUR');
 ```
 
 ---
 
 ## FAQ
 
-### Le status affiche "Bloqué par X", c'est grave ?
+### Où exécuter les commandes ?
 
-Non, c'est normal. Les étapes ont des dépendances :
-- DataLayer dépend de GTM
-- GTM dépend de GA4
+| Commande | Où l'exécuter |
+|----------|---------------|
+| `init` | N'importe où (config globale) |
+| `init-tracking` | Dans le dossier de votre projet web |
+| `generate-tracking` | Dans le dossier de votre projet web |
+| `sync` | Dans le dossier de votre projet web |
+| `status`, `continue`, `deploy`, `audit` | N'importe où (spécifier le domaine) |
 
-Si GA4 n'est pas configuré, GTM sera "bloqué". Configurez GA4 d'abord.
+### Mes fichiers existants vont être écrasés ?
 
-### Mes fichiers tracking existants vont être écrasés ?
-
-Non. L'outil détecte les fichiers existants et les préserve :
+Non. L'outil détecte les fichiers existants :
 ```
 ⏭️ gtm-head.html existe déjà: ./components/gtm-head.html
-⏭️ Fichier tracking existe déjà: ./js/utils/gtm-tracking.js
+⏭️ Fichier tracking existe déjà: ./src/gtm-tracking.js
 ```
 
-### Comment mettre à jour les triggers après modification du code ?
+Utilisez `--force` pour écraser volontairement.
+
+### Comment détecter les events de mon code existant ?
+
+La commande `sync` détecte automatiquement :
+
+```javascript
+// ✅ Détecté : dataLayer.push direct
+dataLayer.push({ event: 'clic_cta' });
+
+// ✅ Détecté : fonctions wrapper communes
+pushEvent('clic_cta');
+trackEvent('form_submit');
+sendEvent('phone_click');
+
+// ✅ Détecté : wrapper custom
+function track(eventName) { dataLayer.push({ event: eventName }); }
+track('custom_event');
+```
+
+### Où sont stockées mes credentials ?
+
+```
+~/.google-credentials.json     # Credentials Google API
+~/.google-setup-config.json    # Configuration (Account IDs)
+```
+
+### Comment mettre à jour les triggers après modification ?
 
 ```bash
 google-setup sync -d "mon-site.fr"
 ```
 
-La commande `sync` compare votre code local avec GTM et crée uniquement ce qui manque.
+La commande compare votre code avec GTM et crée uniquement ce qui manque.
 
-### Où sont stockées mes credentials ?
+### Le status affiche "Bloqué par X" ?
 
-- Credentials Google : `~/.google-credentials.json`
-- Configuration : `~/.google-setup-config.json`
+C'est normal. Les étapes ont des dépendances :
+```
+GA4 → GTM → DataLayer → Conversions
+```
+
+Si GA4 n'est pas configuré, GTM sera "bloqué". Utilisez `continue` pour déployer dans l'ordre.
 
 ---
 
 ## Développement
 
 ```bash
-# Cloner le repo
 git clone https://github.com/annubis-knight/Google_Setup_CLI.git
 cd Google_Setup_CLI
-
-# Installer les dépendances
 npm install
-
-# Lancer en développement
-node bin/cli.js
-
-# Lancer les tests
-npm test
+npm test        # 42 tests
+node bin/cli.js # Lancer en dev
 ```
 
 ### Structure du projet
 
 ```
 src/
-├── commands/          # Commandes CLI (audit, deploy, status, sync...)
-├── detectors/         # Détection GTM, GA4, Search Console, Hotjar
-├── deployers/         # Création GTM, GA4, triggers, variables
-└── utils/             # Auth, checklist, fichiers générés
+├── commands/       # Commandes CLI
+│   ├── audit.js
+│   ├── deploy.js
+│   ├── status.js
+│   ├── continue.js
+│   ├── sync.js
+│   ├── init-tracking.js
+│   └── generate-tracking.js
+├── detectors/      # Analyse existant (GTM, GA4, Search Console)
+├── deployers/      # Création (triggers, tags, variables)
+├── templates/      # Templates YAML/MD
+└── utils/          # Auth, checklist, helpers
 ```
 
 ---
 
 ## Licence
 
-MIT - Utilisez librement dans vos projets.
+MIT — Utilisez librement dans vos projets.
 
 ---
 
 **Créé par [Arnaud Gutierrez](mailto:arnaud.g.motiv@gmail.com)**
+
