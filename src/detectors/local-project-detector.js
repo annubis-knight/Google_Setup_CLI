@@ -106,31 +106,80 @@ function analyzeTrackingFile(content) {
   const events = [];
   const variables = [];
 
-  // Pattern pour les dataLayer.push avec event
+  // Events système GTM à exclure
+  const systemEvents = ['gtm.js', 'gtm.start', 'gtm.dom', 'gtm.load', 'gtm.click', 'gtm.linkClick', 'gtm.formSubmit', 'gtm.historyChange'];
+
+  // ===== STRATÉGIE 1 : dataLayer.push direct =====
   // Matche: dataLayer.push({ event: 'nom_event', ... })
-  const eventPatterns = [
-    /dataLayer\.push\(\s*\{\s*event\s*:\s*['"`]([^'"`]+)['"`]/g,
-    /event\s*:\s*['"`]([^'"`]+)['"`]/g
+  const directPushPattern = /dataLayer\.push\(\s*\{[^}]*event\s*:\s*['"`]([^'"`]+)['"`]/g;
+  let match;
+  while ((match = directPushPattern.exec(content)) !== null) {
+    if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
+      events.push(match[1]);
+    }
+  }
+
+  // ===== STRATÉGIE 2 : Fonctions wrapper communes =====
+  // Matche: pushEvent('xxx'), trackEvent('xxx'), sendEvent('xxx'), gtmPush('xxx'), track('xxx')
+  const wrapperPatterns = [
+    /(?:pushEvent|trackEvent|sendEvent|gtmPush|gtmEvent)\s*\(\s*['"`]([^'"`]+)['"`]/g,
+    /\.push\(\s*\{\s*event\s*:\s*(\w+)/g  // dataLayer.push({ event: eventName }) - variable
   ];
 
-  for (const pattern of eventPatterns) {
-    let match;
+  for (const pattern of wrapperPatterns) {
     while ((match = pattern.exec(content)) !== null) {
-      if (match[1] && !events.includes(match[1])) {
+      if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
+        // Ignorer les noms de variables (eventName, event, etc.)
+        if (!['eventName', 'event', 'name', 'type'].includes(match[1])) {
+          events.push(match[1]);
+        }
+      }
+    }
+  }
+
+  // ===== STRATÉGIE 3 : Détection dynamique de fonction wrapper =====
+  // Cherche une fonction qui fait dataLayer.push({ event: paramName })
+  // puis cherche tous les appels à cette fonction
+  const wrapperFuncMatch = content.match(/function\s+(\w+)\s*\(\s*(\w+)(?:\s*,\s*\w+)*\s*\)\s*\{[^}]*(?:dataLayer\.push|window\.dataLayer\.push)\s*\(\s*\{[^}]*event\s*:\s*\2/);
+
+  if (wrapperFuncMatch) {
+    const funcName = wrapperFuncMatch[1];
+    // Chercher tous les appels à cette fonction
+    const callPattern = new RegExp(`${funcName}\\s*\\(\\s*['"\`]([^'"\`]+)['"\`]`, 'g');
+    while ((match = callPattern.exec(content)) !== null) {
+      if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
         events.push(match[1]);
       }
     }
   }
 
-  // Pattern pour les variables dans dataLayer.push
-  // Matche: variable_name: value
-  const variablePattern = /(\w+)\s*:\s*(?:['"`][^'"`]*['"`]|\w+|{)/g;
-  let match;
+  // ===== STRATÉGIE 4 : Objets event inline =====
+  // Matche: { event: 'xxx' } dans différents contextes
+  const inlineEventPattern = /\{\s*event\s*:\s*['"`]([^'"`]+)['"`]/g;
+  while ((match = inlineEventPattern.exec(content)) !== null) {
+    if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
+      events.push(match[1]);
+    }
+  }
+
+  // ===== EXTRACTION DES VARIABLES =====
+  // Pattern pour les variables dans les objets dataLayer
+  // Cherche les propriétés dans les objets { key: value }
+  const variablePattern = /(\w+)\s*:\s*(?:['"`][^'"`]*['"`]|\w+(?:\.\w+)*|{|\[)/g;
   while ((match = variablePattern.exec(content)) !== null) {
     const varName = match[1];
-    // Exclure les mots-clés JS et event
-    const excluded = ['event', 'function', 'return', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'true', 'false', 'null', 'undefined', 'items', 'value', 'currency'];
-    if (!excluded.includes(varName) && !variables.includes(varName)) {
+    // Exclure les mots-clés JS, event, et propriétés système
+    const excluded = [
+      'event', 'function', 'return', 'const', 'let', 'var', 'if', 'else', 'for', 'while',
+      'true', 'false', 'null', 'undefined', 'items', 'value', 'currency', 'this', 'new',
+      'async', 'await', 'export', 'import', 'default', 'class', 'extends', 'constructor',
+      'get', 'set', 'static', 'super', 'typeof', 'instanceof', 'delete', 'void', 'yield',
+      'try', 'catch', 'finally', 'throw', 'switch', 'case', 'break', 'continue', 'do',
+      'ecommerce', 'timestamp', 'gtm', 'dataLayer', 'window', 'document', 'console',
+      'type', 'name', 'id', 'key', 'index', 'length', 'data', 'options', 'config',
+      'payload', 'params', 'args', 'callback', 'handler', 'listener', 'target', 'source'
+    ];
+    if (!excluded.includes(varName) && !variables.includes(varName) && varName.length > 2) {
       variables.push(varName);
     }
   }
