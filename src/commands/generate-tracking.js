@@ -23,12 +23,26 @@ export async function runGenerateTracking(options = {}) {
 
   console.log(chalk.cyan('\n📝 Génération du fichier gtm-tracking.js\n'));
 
+  // Vérifier que le dossier tracking/ existe
+  const trackingDirPath = join(projectPath, trackingDir);
+  if (!existsSync(trackingDirPath)) {
+    console.log(chalk.red(`❌ Dossier non trouvé: ${trackingDirPath}`));
+    console.log(chalk.yellow('\n💡 Étapes à suivre:'));
+    console.log(chalk.gray('   1. Lancez: google-setup init-tracking'));
+    console.log(chalk.gray('   2. Éditez tracking/tracking-plan.yml (enabled: true/false)'));
+    console.log(chalk.gray('   3. Relancez: google-setup generate-tracking'));
+    return;
+  }
+
   // Vérifier que le YAML existe
   if (!existsSync(yamlPath)) {
     console.log(chalk.red(`❌ Fichier non trouvé: ${yamlPath}`));
-    console.log(chalk.gray('   Lancez d\'abord: google-setup init-tracking'));
+    console.log(chalk.yellow('\n💡 Le dossier tracking/ existe mais pas le fichier YAML.'));
+    console.log(chalk.gray('   Lancez: google-setup init-tracking'));
     return;
   }
+
+  console.log(chalk.gray(`📁 Source: ${yamlPath}\n`));
 
   // Vérifier si le fichier de sortie existe déjà
   if (existsSync(outputPath) && !options.force) {
