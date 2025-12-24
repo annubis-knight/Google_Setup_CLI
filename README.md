@@ -188,7 +188,7 @@ google-setup init
 cd /mon-nouveau-projet
 
 # 2. Déployer tout automatiquement
-google-setup deploy -d "mon-site.fr" -n "Mon Site" -t lead-gen
+google-setup deploy -d "mon-site.fr" -n "Mon Site"
 
 # 3. Intégrer les fichiers générés dans votre HTML
 ```
@@ -348,6 +348,55 @@ google-setup audit -d "site1.fr,site2.fr,site3.fr"
 
 ---
 
+### Cas 7 : Nettoyer GTM (supprimer les orphelins)
+
+**Situation** : Votre GTM contient des triggers/tags/variables qui ne sont plus utilisés dans votre code.
+
+```bash
+# 1. Voir ce qui serait supprimé (sans supprimer)
+google-setup clean -d "mon-site.fr" --dry-run
+
+# 2. Supprimer après confirmation
+google-setup clean -d "mon-site.fr"
+
+# 3. Supprimer sans confirmation (dangereux)
+google-setup clean -d "mon-site.fr" --force
+```
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  🧹 Nettoyage GTM - mon-site.fr                              │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Comparaison Local ↔ GTM...                                  │
+│                                                              │
+│  📁 Source locale: ./gtm-tracking.js                         │
+│     Events locaux: clic_cta, form_submit, phone_click        │
+│                                                              │
+│  🏷️  Éléments orphelins dans GTM (non utilisés en local):    │
+│                                                              │
+│  ⚠️  Triggers à supprimer:                                   │
+│      • EV - old_event_1                                      │
+│      • EV - deprecated_click                                 │
+│                                                              │
+│  ⚠️  Tags à supprimer:                                       │
+│      • GA4 - EV - Old Event                                  │
+│                                                              │
+│  ⚠️  Variables à supprimer:                                  │
+│      • DLV - unused_var                                      │
+│                                                              │
+│  ─────────────────────────────────────────────────────────── │
+│  Total: 4 éléments à supprimer                               │
+│                                                              │
+│  ? Confirmer la suppression ? (y/N)                          │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+> **Attention** : Cette commande supprime des éléments dans GTM. Utilisez `--dry-run` d'abord !
+
+---
+
 ## Toutes les commandes
 
 ### Mode interactif
@@ -374,6 +423,7 @@ Audit & Déploiement automatique Google Analytics
   🔄 Synchroniser projet local → GTM (sync)
   📄 Générer plan de taggage (init-tracking)
   ⚡ Générer gtm-tracking.js (generate-tracking)
+  🧹 Nettoyer GTM (clean)
   🔍 Auditer un ou plusieurs domaines
   🚀 Déployer from scratch
   ❌ Quitter
@@ -385,20 +435,41 @@ Audit & Déploiement automatique Google Analytics
 |----------|-------------|---------|
 | `init` | Configurer les credentials | - |
 | `status` | Voir la checklist | `-d, --domain` |
-| `continue` | Reprendre le déploiement | `-d, --domain` `-t, --template` `--auto` |
+| `continue` | Reprendre le déploiement | `-d, --domain` `--auto` |
 | `sync` | Sync local → GTM | `-p, --path` `-d, --domain` `--auto` |
 | `init-tracking` | Générer YAML + MD | `-p, --path` `-o, --output` `--force` |
 | `generate-tracking` | Générer JS depuis YAML | `-p, --path` `-i, --input` `-o, --output` `--force` |
 | `audit` | Auditer un/plusieurs sites | `-d, --domains` `-o, --output` |
-| `deploy` | Déploiement complet | `-d, --domain` `-n, --name` `-t, --template` `--auto` |
+| `deploy` | Déploiement complet | `-d, --domain` `-n, --name` `--auto` |
+| `clean` | Nettoyer GTM (supprimer orphelins) | `-d, --domain` `-p, --path` `--dry-run` `--force` |
 
-### Templates disponibles
+### Template modulable
 
-| Template | Events inclus | Cas d'usage |
-|----------|---------------|-------------|
-| `minimal` | Pageviews uniquement | Blog, site vitrine simple |
-| `lead-gen` | CTA, formulaires, téléphone, scroll | Site de génération de leads |
-| `ecommerce` | view_item, add_to_cart, purchase... | Boutique en ligne |
+Le fichier `tracking-plan.yml` contient **tous les events possibles** avec un flag `enabled: true/false` :
+
+```yaml
+events:
+  # Lead Generation
+  - id: "cta_click"
+    enabled: true       # ← Activé
+
+  # E-commerce
+  - id: "purchase"
+    enabled: false      # ← Désactivé (pas e-commerce)
+
+  # Engagement
+  - id: "scroll_depth"
+    enabled: true       # ← Activé
+```
+
+**Catégories disponibles :**
+| Catégorie | Events | Activer si... |
+|-----------|--------|---------------|
+| Lead Generation | cta_click, form_submit | Site vitrine, landing pages |
+| Contact | phone_click, email_click, whatsapp_click | Coordonnées cliquables |
+| Engagement | scroll_depth | Mesure de l'engagement |
+| Funnel | funnel_step | Parcours multi-étapes |
+| Ecommerce | view_item, add_to_cart, purchase... | Boutique en ligne |
 
 ---
 

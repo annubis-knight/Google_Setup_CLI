@@ -9,6 +9,7 @@ import { runContinue } from '../src/commands/continue.js';
 import { runSync } from '../src/commands/sync.js';
 import { runInitTracking } from '../src/commands/init-tracking.js';
 import { runGenerateTracking } from '../src/commands/generate-tracking.js';
+import { runClean } from '../src/commands/clean.js';
 
 const program = new Command();
 
@@ -76,6 +77,15 @@ program
   .option('-o, --output <file>', 'Fichier de sortie (défaut: gtm-tracking.js)')
   .option('--force', 'Écraser si le fichier existe')
   .action(runGenerateTracking);
+
+program
+  .command('clean')
+  .description('Nettoyer GTM : supprimer triggers/tags/variables orphelins')
+  .option('-d, --domain <domain>', 'Domaine cible')
+  .option('-p, --path <path>', 'Chemin du projet local (défaut: répertoire courant)')
+  .option('--dry-run', 'Voir ce qui serait supprimé sans supprimer')
+  .option('--force', 'Supprimer sans confirmation')
+  .action(runClean);
 
 // Mode interactif par défaut si aucun argument
 if (process.argv.length === 2) {

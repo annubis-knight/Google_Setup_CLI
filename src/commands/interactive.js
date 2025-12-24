@@ -8,6 +8,7 @@ import { runContinue } from './continue.js';
 import { runSync } from './sync.js';
 import { handleInitTrackingInteractive } from './init-tracking.js';
 import { handleGenerateTrackingInteractive } from './generate-tracking.js';
+import { handleCleanInteractive } from './clean.js';
 
 export async function interactiveMode() {
   console.clear();
@@ -27,6 +28,7 @@ export async function interactiveMode() {
         { name: '🔄 Synchroniser projet local → GTM (sync)', value: 'sync' },
         { name: '📄 Générer plan de taggage (init-tracking)', value: 'init-tracking' },
         { name: '⚡ Générer gtm-tracking.js (generate-tracking)', value: 'generate-tracking' },
+        { name: '🧹 Nettoyer GTM (clean)', value: 'clean' },
         { name: '🔍 Auditer un ou plusieurs domaines', value: 'audit' },
         { name: '🚀 Déployer from scratch', value: 'deploy' },
         { name: '❌ Quitter', value: 'exit' }
@@ -56,6 +58,10 @@ export async function interactiveMode() {
 
     if (action === 'generate-tracking') {
       await handleGenerateTrackingInteractive();
+    }
+
+    if (action === 'clean') {
+      await handleCleanInteractive();
     }
 
     if (action === 'audit') {
@@ -94,16 +100,6 @@ async function handleDeployInteractive() {
       name: 'name',
       message: 'Nom du projet :',
       default: (ans) => ans.domain.split('.')[0]
-    },
-    {
-      type: 'list',
-      name: 'template',
-      message: 'Template GTM :',
-      choices: [
-        { name: 'Lead Generation (CTA, formulaires, téléphone)', value: 'lead-gen' },
-        { name: 'E-commerce (panier, achat)', value: 'ecommerce' },
-        { name: 'Minimal (GA4 pageviews)', value: 'minimal' }
-      ]
     }
   ]);
 
@@ -132,16 +128,6 @@ async function handleContinueInteractive() {
       name: 'domain',
       message: 'Domaine cible :',
       validate: v => /^[a-z0-9\-\.]+\.[a-z]{2,}$/i.test(v) || 'Domaine invalide'
-    },
-    {
-      type: 'list',
-      name: 'template',
-      message: 'Template GTM (si création nécessaire) :',
-      choices: [
-        { name: 'Lead Generation (CTA, formulaires, téléphone)', value: 'lead-gen' },
-        { name: 'E-commerce (panier, achat)', value: 'ecommerce' },
-        { name: 'Minimal (GA4 pageviews)', value: 'minimal' }
-      ]
     },
     {
       type: 'confirm',
