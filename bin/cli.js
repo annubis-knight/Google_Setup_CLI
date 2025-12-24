@@ -7,6 +7,7 @@ import { runInit } from '../src/commands/init.js';
 import { runStatus } from '../src/commands/status.js';
 import { runContinue } from '../src/commands/continue.js';
 import { runSync } from '../src/commands/sync.js';
+import { runInitTracking } from '../src/commands/init-tracking.js';
 
 const program = new Command();
 
@@ -57,6 +58,14 @@ program
   .option('-d, --domain <domain>', 'Domaine cible')
   .option('--auto', 'Mode automatique sans confirmation')
   .action(runSync);
+
+program
+  .command('init-tracking')
+  .description('Générer les fichiers de plan de taggage (YAML + Markdown)')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .option('-o, --output <dir>', 'Dossier de sortie (défaut: tracking)')
+  .option('--force', 'Écraser les fichiers existants')
+  .action(runInitTracking);
 
 // Mode interactif par défaut si aucun argument
 if (process.argv.length === 2) {

@@ -6,6 +6,7 @@ import { runDeploy } from './deploy.js';
 import { runStatus } from './status.js';
 import { runContinue } from './continue.js';
 import { runSync } from './sync.js';
+import { handleInitTrackingInteractive } from './init-tracking.js';
 
 export async function interactiveMode() {
   console.clear();
@@ -23,6 +24,7 @@ export async function interactiveMode() {
         { name: '📋 Voir la progression d\'un site (status)', value: 'status' },
         { name: '▶️  Continuer le déploiement (continue)', value: 'continue' },
         { name: '🔄 Synchroniser projet local → GTM (sync)', value: 'sync' },
+        { name: '📄 Générer plan de taggage (init-tracking)', value: 'init-tracking' },
         { name: '🔍 Auditer un ou plusieurs domaines', value: 'audit' },
         { name: '🚀 Déployer from scratch', value: 'deploy' },
         { name: '❌ Quitter', value: 'exit' }
@@ -44,6 +46,10 @@ export async function interactiveMode() {
 
     if (action === 'sync') {
       await handleSyncInteractive();
+    }
+
+    if (action === 'init-tracking') {
+      await handleInitTrackingInteractive();
     }
 
     if (action === 'audit') {

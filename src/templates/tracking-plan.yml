@@ -1,0 +1,549 @@
+# =================================================
+# PLAN DE TAGGAGE - TEMPLATE UNIVERSEL
+# Généré par google-setup-cli
+# =================================================
+#
+# INSTRUCTIONS:
+# 1. Copiez ce fichier dans votre projet : /tracking/gtm-tracking-plan.yml
+# 2. Remplissez la section "project" avec vos infos
+# 3. Gardez uniquement les events dont vous avez besoin
+# 4. Ajoutez vos events custom si nécessaire
+# 5. Lancez: google-setup sync pour synchroniser avec GTM
+#
+# SECTIONS:
+# - [LEAD-GEN] : Sites de génération de leads
+# - [ECOMMERCE] : Sites e-commerce
+# - [ENGAGEMENT] : Mesure d'engagement (scroll, temps, etc.)
+# - [CONTACT] : Tracking des contacts (tel, email, whatsapp)
+# - [FUNNEL] : Suivi de parcours multi-étapes
+# =================================================
+
+project:
+  name: ""                          # Nom du projet (ex: "Mon Site")
+  domain: ""                        # Domaine (ex: "mon-site.fr")
+  ga4_measurement_id: ""            # ID GA4 (ex: "G-XXXXXXXXXX")
+  gtm_container_id: ""              # ID GTM (ex: "GTM-XXXXXXX")
+  updated: ""                       # Date de mise à jour
+
+# =================================================
+# ÉVÉNEMENTS TRACKÉS
+# =================================================
+#
+# Structure de chaque event:
+#   id: identifiant unique
+#   name: nom lisible
+#   category: catégorie (Lead Gen, Ecommerce, Contact, Engagement, Funnel)
+#   objective: objectif business
+#   enabled: true/false (désactiver sans supprimer)
+#
+#   trigger:
+#     user_action: description de l'action
+#     html_selector: sélecteur CSS (optionnel)
+#     auto_track: true si tracking automatique (liens tel/mailto)
+#
+#   datalayer:
+#     event_name: nom de l'event dans dataLayer.push()
+#     javascript_function: fonction JS à appeler
+#     params: liste des paramètres
+#
+#   gtm:
+#     trigger: { type, name, condition }
+#     tag: { name, type }
+#
+#   ga4:
+#     event_name: nom dans GA4 (peut différer du dataLayer)
+#     conversion: true si c'est une conversion
+#     parameters: mapping des paramètres
+# =================================================
+
+events:
+
+  # ===============================================
+  # [LEAD-GEN] CTA & BOUTONS D'ACTION
+  # ===============================================
+
+  - id: "cta_click"
+    name: "CTA - Clic"
+    category: "Lead Generation"
+    objective: "Mesurer les clics sur les CTAs principaux"
+    enabled: true
+
+    trigger:
+      user_action: "Clic sur bouton CTA"
+      html_selector: "[data-track-cta], .cta-button, .btn-primary"
+
+    datalayer:
+      event_name: "clic_cta"
+      javascript_function: "trackCTA(location)"
+      params:
+        - name: "cta_location"
+          type: "string"
+          description: "Position du CTA"
+          values: ["hero", "banner", "footer", "navbar", "sidebar", "popup"]
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - clic_cta"
+        condition: "event equals clic_cta"
+      tag:
+        name: "GA4 - EV - CTA Click"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "clic_cta"
+      conversion: true
+      parameters:
+        - name: "cta_location"
+          variable: "{{DLV - cta_location}}"
+
+  # ===============================================
+  # [LEAD-GEN] FORMULAIRES
+  # ===============================================
+
+  - id: "form_submit"
+    name: "Formulaire - Soumission"
+    category: "Lead Generation"
+    objective: "Lead généré via formulaire"
+    enabled: true
+
+    trigger:
+      user_action: "Soumission de formulaire"
+
+    datalayer:
+      event_name: "form_submit"
+      javascript_function: "trackFormSubmit(formName, value)"
+      params:
+        - name: "form_name"
+          type: "string"
+          description: "Nom du formulaire"
+          values: ["contact", "devis", "newsletter", "callback", "demo"]
+          required: true
+        - name: "lead_value"
+          type: "number"
+          description: "Valeur estimée du lead"
+          default: 0
+          required: false
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - form_submit"
+        condition: "event equals form_submit"
+      tag:
+        name: "GA4 - EV - Form Submit"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "generate_lead"
+      conversion: true
+      parameters:
+        - name: "form_name"
+          variable: "{{DLV - form_name}}"
+        - name: "value"
+          variable: "{{DLV - lead_value}}"
+        - name: "currency"
+          value: "EUR"
+
+  # ===============================================
+  # [CONTACT] TÉLÉPHONE, EMAIL, WHATSAPP
+  # ===============================================
+
+  - id: "phone_click"
+    name: "Contact - Téléphone"
+    category: "Contact"
+    objective: "Intention de contact par téléphone"
+    enabled: true
+
+    trigger:
+      user_action: "Clic sur numéro de téléphone"
+      html_selector: "a[href^='tel:']"
+      auto_track: true
+
+    datalayer:
+      event_name: "phone_click"
+      javascript_function: "trackPhoneClick()"
+      params: []
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - phone_click"
+        condition: "event equals phone_click"
+      tag:
+        name: "GA4 - EV - Phone Click"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "phone_click"
+      conversion: true
+      parameters: []
+
+  - id: "email_click"
+    name: "Contact - Email"
+    category: "Contact"
+    objective: "Intention de contact par email"
+    enabled: true
+
+    trigger:
+      user_action: "Clic sur lien email"
+      html_selector: "a[href^='mailto:']"
+      auto_track: true
+
+    datalayer:
+      event_name: "email_click"
+      javascript_function: "trackEmailClick()"
+      params: []
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - email_click"
+        condition: "event equals email_click"
+      tag:
+        name: "GA4 - EV - Email Click"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "email_click"
+      conversion: false
+      parameters: []
+
+  - id: "whatsapp_click"
+    name: "Contact - WhatsApp"
+    category: "Contact"
+    objective: "Intention de contact par WhatsApp"
+    enabled: false  # Activer si utilisé
+
+    trigger:
+      user_action: "Clic sur lien WhatsApp"
+      html_selector: "a[href*='wa.me'], a[href*='whatsapp']"
+      auto_track: true
+
+    datalayer:
+      event_name: "whatsapp_click"
+      javascript_function: "trackWhatsAppClick()"
+      params: []
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - whatsapp_click"
+        condition: "event equals whatsapp_click"
+      tag:
+        name: "GA4 - EV - WhatsApp Click"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "whatsapp_click"
+      conversion: false
+      parameters: []
+
+  # ===============================================
+  # [FUNNEL] PARCOURS MULTI-ÉTAPES
+  # ===============================================
+
+  - id: "funnel_step"
+    name: "Funnel - Étape"
+    category: "Funnel"
+    objective: "Mesurer la progression dans un parcours"
+    enabled: false  # Activer si parcours multi-étapes
+
+    trigger:
+      user_action: "Affichage d'une étape"
+
+    datalayer:
+      event_name: "funnel_step"
+      javascript_function: "trackFunnelStep(funnelName, stepNumber, stepName)"
+      params:
+        - name: "funnel_name"
+          type: "string"
+          description: "Nom du funnel"
+          values: ["devis", "inscription", "checkout"]
+          required: true
+        - name: "step_number"
+          type: "number"
+          description: "Numéro de l'étape"
+          required: true
+        - name: "step_name"
+          type: "string"
+          description: "Nom de l'étape"
+          required: false
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - funnel_step"
+        condition: "event equals funnel_step"
+      tag:
+        name: "GA4 - EV - Funnel Step"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "funnel_step"
+      conversion: false
+      parameters:
+        - name: "funnel_name"
+          variable: "{{DLV - funnel_name}}"
+        - name: "step_number"
+          variable: "{{DLV - step_number}}"
+        - name: "step_name"
+          variable: "{{DLV - step_name}}"
+
+  # ===============================================
+  # [ENGAGEMENT] SCROLL
+  # ===============================================
+
+  - id: "scroll_depth"
+    name: "Scroll - Profondeur"
+    category: "Engagement"
+    objective: "Mesurer l'engagement sur la page"
+    enabled: true
+
+    trigger:
+      user_action: "Scroll à 25%, 50%, 75%, 100%"
+
+    datalayer:
+      event_name: "scroll_depth"
+      javascript_function: "trackScrollDepth()"
+      params:
+        - name: "scroll_percent"
+          type: "number"
+          description: "Pourcentage de scroll"
+          values: [25, 50, 75, 100]
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - scroll_depth"
+        condition: "event equals scroll_depth"
+      tag:
+        name: "GA4 - EV - Scroll Depth"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "scroll"
+      conversion: false
+      parameters:
+        - name: "percent_scrolled"
+          variable: "{{DLV - scroll_percent}}"
+
+  # ===============================================
+  # [ECOMMERCE] VUE PRODUIT
+  # ===============================================
+
+  - id: "view_item"
+    name: "Produit - Vue"
+    category: "Ecommerce"
+    objective: "Mesurer l'intérêt pour les produits"
+    enabled: false  # Activer pour e-commerce
+
+    trigger:
+      user_action: "Affichage page produit"
+
+    datalayer:
+      event_name: "view_item"
+      javascript_function: "trackViewItem(item)"
+      params:
+        - name: "ecommerce"
+          type: "object"
+          description: "Objet ecommerce GA4"
+          required: true
+          schema:
+            items:
+              - item_id: "string"
+              - item_name: "string"
+              - price: "number"
+              - quantity: "number"
+            value: "number"
+            currency: "string"
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - view_item"
+        condition: "event equals view_item"
+      tag:
+        name: "GA4 - EV - View Item"
+        type: "Événement GA4"
+        ecommerce: true
+
+    ga4:
+      event_name: "view_item"
+      conversion: false
+      ecommerce: true
+
+  # ===============================================
+  # [ECOMMERCE] AJOUT PANIER
+  # ===============================================
+
+  - id: "add_to_cart"
+    name: "Panier - Ajout"
+    category: "Ecommerce"
+    objective: "Mesurer les ajouts au panier"
+    enabled: false  # Activer pour e-commerce
+
+    trigger:
+      user_action: "Clic bouton ajout panier"
+
+    datalayer:
+      event_name: "add_to_cart"
+      javascript_function: "trackAddToCart(item)"
+      params:
+        - name: "ecommerce"
+          type: "object"
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - add_to_cart"
+        condition: "event equals add_to_cart"
+      tag:
+        name: "GA4 - EV - Add to Cart"
+        type: "Événement GA4"
+        ecommerce: true
+
+    ga4:
+      event_name: "add_to_cart"
+      conversion: true
+      ecommerce: true
+
+  # ===============================================
+  # [ECOMMERCE] CHECKOUT
+  # ===============================================
+
+  - id: "begin_checkout"
+    name: "Checkout - Début"
+    category: "Ecommerce"
+    objective: "Mesurer les débuts de checkout"
+    enabled: false  # Activer pour e-commerce
+
+    trigger:
+      user_action: "Clic bouton commander"
+
+    datalayer:
+      event_name: "begin_checkout"
+      javascript_function: "trackBeginCheckout(items, value, currency)"
+      params:
+        - name: "ecommerce"
+          type: "object"
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - begin_checkout"
+        condition: "event equals begin_checkout"
+      tag:
+        name: "GA4 - EV - Begin Checkout"
+        type: "Événement GA4"
+        ecommerce: true
+
+    ga4:
+      event_name: "begin_checkout"
+      conversion: true
+      ecommerce: true
+
+  # ===============================================
+  # [ECOMMERCE] ACHAT
+  # ===============================================
+
+  - id: "purchase"
+    name: "Achat - Confirmation"
+    category: "Ecommerce"
+    objective: "Conversion e-commerce principale"
+    enabled: false  # Activer pour e-commerce
+
+    trigger:
+      user_action: "Page confirmation de commande"
+
+    datalayer:
+      event_name: "purchase"
+      javascript_function: "trackPurchase(transactionId, items, value, currency)"
+      params:
+        - name: "ecommerce"
+          type: "object"
+          required: true
+          schema:
+            transaction_id: "string"
+            items: "array"
+            value: "number"
+            currency: "string"
+            tax: "number"
+            shipping: "number"
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - purchase"
+        condition: "event equals purchase"
+      tag:
+        name: "GA4 - EV - Purchase"
+        type: "Événement GA4"
+        ecommerce: true
+
+    ga4:
+      event_name: "purchase"
+      conversion: true
+      ecommerce: true
+
+# =================================================
+# VARIABLES DATALAYER À CRÉER DANS GTM
+# =================================================
+
+variables:
+  datalayer:
+    # Lead Gen
+    - name: "DLV - cta_location"
+      datalayer_name: "cta_location"
+      type: "Variable de couche de données"
+
+    - name: "DLV - form_name"
+      datalayer_name: "form_name"
+      type: "Variable de couche de données"
+
+    - name: "DLV - lead_value"
+      datalayer_name: "lead_value"
+      type: "Variable de couche de données"
+
+    # Funnel
+    - name: "DLV - funnel_name"
+      datalayer_name: "funnel_name"
+      type: "Variable de couche de données"
+
+    - name: "DLV - step_number"
+      datalayer_name: "step_number"
+      type: "Variable de couche de données"
+
+    - name: "DLV - step_name"
+      datalayer_name: "step_name"
+      type: "Variable de couche de données"
+
+    # Engagement
+    - name: "DLV - scroll_percent"
+      datalayer_name: "scroll_percent"
+      type: "Variable de couche de données"
+
+    # Ecommerce (si activé)
+    - name: "DLV - ecommerce.items"
+      datalayer_name: "ecommerce.items"
+      type: "Variable de couche de données"
+      category: "ecommerce"
+
+    - name: "DLV - ecommerce.value"
+      datalayer_name: "ecommerce.value"
+      type: "Variable de couche de données"
+      category: "ecommerce"
+
+    - name: "DLV - ecommerce.currency"
+      datalayer_name: "ecommerce.currency"
+      type: "Variable de couche de données"
+      category: "ecommerce"
+
+    - name: "DLV - ecommerce.transaction_id"
+      datalayer_name: "ecommerce.transaction_id"
+      type: "Variable de couche de données"
+      category: "ecommerce"
