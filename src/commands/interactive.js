@@ -7,6 +7,7 @@ import { runStatus } from './status.js';
 import { runContinue } from './continue.js';
 import { runSync } from './sync.js';
 import { handleInitTrackingInteractive } from './init-tracking.js';
+import { handleGenerateTrackingInteractive } from './generate-tracking.js';
 
 export async function interactiveMode() {
   console.clear();
@@ -25,6 +26,7 @@ export async function interactiveMode() {
         { name: '▶️  Continuer le déploiement (continue)', value: 'continue' },
         { name: '🔄 Synchroniser projet local → GTM (sync)', value: 'sync' },
         { name: '📄 Générer plan de taggage (init-tracking)', value: 'init-tracking' },
+        { name: '⚡ Générer gtm-tracking.js (generate-tracking)', value: 'generate-tracking' },
         { name: '🔍 Auditer un ou plusieurs domaines', value: 'audit' },
         { name: '🚀 Déployer from scratch', value: 'deploy' },
         { name: '❌ Quitter', value: 'exit' }
@@ -50,6 +52,10 @@ export async function interactiveMode() {
 
     if (action === 'init-tracking') {
       await handleInitTrackingInteractive();
+    }
+
+    if (action === 'generate-tracking') {
+      await handleGenerateTrackingInteractive();
     }
 
     if (action === 'audit') {

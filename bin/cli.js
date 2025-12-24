@@ -8,6 +8,7 @@ import { runStatus } from '../src/commands/status.js';
 import { runContinue } from '../src/commands/continue.js';
 import { runSync } from '../src/commands/sync.js';
 import { runInitTracking } from '../src/commands/init-tracking.js';
+import { runGenerateTracking } from '../src/commands/generate-tracking.js';
 
 const program = new Command();
 
@@ -66,6 +67,15 @@ program
   .option('-o, --output <dir>', 'Dossier de sortie (défaut: tracking)')
   .option('--force', 'Écraser les fichiers existants')
   .action(runInitTracking);
+
+program
+  .command('generate-tracking')
+  .description('Générer gtm-tracking.js à partir du tracking-plan.yml')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .option('-i, --input <dir>', 'Dossier du YAML (défaut: tracking)')
+  .option('-o, --output <file>', 'Fichier de sortie (défaut: gtm-tracking.js)')
+  .option('--force', 'Écraser si le fichier existe')
+  .action(runGenerateTracking);
 
 // Mode interactif par défaut si aucun argument
 if (process.argv.length === 2) {
