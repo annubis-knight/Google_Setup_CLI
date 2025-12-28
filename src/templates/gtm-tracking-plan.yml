@@ -16,6 +16,23 @@
 # - [ENGAGEMENT] : Mesure d'engagement (scroll, temps, etc.)
 # - [CONTACT] : Tracking des contacts (tel, email, whatsapp)
 # - [FUNNEL] : Suivi de parcours multi-étapes
+# - [CONSOLIDATED] : Events consolidés (1 tag pour N actions)
+#
+# BONNES PRATIQUES - CONSOLIDATION D'EVENTS:
+# ============================================
+# GA4 préfère des events génériques + paramètres riches plutôt que
+# 50 events ultra-spécifiques. Cela simplifie :
+# - L'interface GTM (moins de balises à maintenir)
+# - Les rapports GA4 (1 rapport avec dimensions au lieu de N rapports)
+# - Les funnels GA4 (1 seul event à configurer)
+#
+# EXEMPLES DE CONSOLIDATION:
+# - video_start, video_progress, video_complete → video_interaction + video_action
+# - faq_open, faq_close → faq_interaction + faq_action
+# - navbar_cta, footer_cta, hero_cta → cta_click + cta_location
+#
+# Pour consolider, utilisez le champ "consolidated: true" et définissez
+# un paramètre "action" qui distingue les différentes actions.
 # =================================================
 
 project:
@@ -547,3 +564,346 @@ variables:
       datalayer_name: "ecommerce.transaction_id"
       type: "Variable de couche de données"
       category: "ecommerce"
+
+# =================================================
+# EVENTS CONSOLIDÉS (BEST PRACTICE)
+# =================================================
+# Ces events regroupent plusieurs actions en 1 seul tag GTM
+# avec un paramètre "action" pour distinguer les variantes.
+# Cela réduit le nombre de balises et simplifie GA4.
+# =================================================
+
+consolidated_events:
+
+  # ===============================================
+  # VIDEO_INTERACTION (remplace 5 events séparés)
+  # ===============================================
+  # Avant: video_start, video_progress, video_complete, video_close, video_click
+  # Après: 1 tag "video_interaction" avec param video_action
+
+  - id: "video_interaction"
+    name: "Vidéo - Interaction"
+    category: "Engagement"
+    objective: "Mesurer toutes les interactions vidéo"
+    enabled: false  # Activer si vidéos sur le site
+    consolidated: true
+
+    # Actions regroupées dans cet event
+    actions:
+      - id: "start"
+        description: "Lecture démarrée"
+      - id: "progress"
+        description: "Progression (25%, 50%, 75%)"
+      - id: "complete"
+        description: "Vidéo terminée"
+      - id: "close"
+        description: "Vidéo fermée avant la fin"
+      - id: "click"
+        description: "Clic sur la vidéo"
+
+    datalayer:
+      event_name: "video_interaction"
+      javascript_function: "trackVideoInteraction(action, videoTitle, progress)"
+      params:
+        - name: "video_action"
+          type: "string"
+          description: "Type d'action"
+          values: ["start", "progress", "complete", "close", "click"]
+          required: true
+        - name: "video_title"
+          type: "string"
+          description: "Titre de la vidéo"
+          required: true
+        - name: "video_progress"
+          type: "number"
+          description: "Pourcentage de progression"
+          required: false
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - video_interaction"
+        condition: "event equals video_interaction"
+      tag:
+        name: "GA4 - EV - Video Interaction"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "video_interaction"
+      conversion: false
+      parameters:
+        - name: "video_action"
+          variable: "{{DLV - video_action}}"
+        - name: "video_title"
+          variable: "{{DLV - video_title}}"
+        - name: "video_progress"
+          variable: "{{DLV - video_progress}}"
+
+  # ===============================================
+  # FAQ_INTERACTION (remplace 2 events séparés)
+  # ===============================================
+  # Avant: faq_open, faq_close
+  # Après: 1 tag "faq_interaction" avec param faq_action
+
+  - id: "faq_interaction"
+    name: "FAQ - Interaction"
+    category: "Engagement"
+    objective: "Mesurer l'engagement avec la FAQ"
+    enabled: false
+    consolidated: true
+
+    actions:
+      - id: "open"
+        description: "Ouverture d'une question"
+      - id: "close"
+        description: "Fermeture d'une question"
+
+    datalayer:
+      event_name: "faq_interaction"
+      javascript_function: "trackFAQInteraction(action, question)"
+      params:
+        - name: "faq_action"
+          type: "string"
+          description: "Type d'action"
+          values: ["open", "close"]
+          required: true
+        - name: "faq_question"
+          type: "string"
+          description: "Texte de la question"
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - faq_interaction"
+        condition: "event equals faq_interaction"
+      tag:
+        name: "GA4 - EV - FAQ Interaction"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "faq_interaction"
+      conversion: false
+      parameters:
+        - name: "faq_action"
+          variable: "{{DLV - faq_action}}"
+        - name: "faq_question"
+          variable: "{{DLV - faq_question}}"
+
+  # ===============================================
+  # MODAL_INTERACTION (remplace 2 events séparés)
+  # ===============================================
+  # Avant: modal_open, modal_close
+  # Après: 1 tag "modal_interaction" avec params
+
+  - id: "modal_interaction"
+    name: "Modal - Interaction"
+    category: "Engagement"
+    objective: "Mesurer l'engagement avec les modales"
+    enabled: false
+    consolidated: true
+
+    actions:
+      - id: "open"
+        description: "Ouverture de la modale"
+      - id: "close"
+        description: "Fermeture de la modale"
+
+    datalayer:
+      event_name: "modal_interaction"
+      javascript_function: "trackModalInteraction(action, modalType)"
+      params:
+        - name: "modal_action"
+          type: "string"
+          description: "Type d'action"
+          values: ["open", "close"]
+          required: true
+        - name: "modal_type"
+          type: "string"
+          description: "Type de modale"
+          values: ["devis", "contact", "popup", "cookie", "newsletter"]
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - modal_interaction"
+        condition: "event equals modal_interaction"
+      tag:
+        name: "GA4 - EV - Modal Interaction"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "modal_interaction"
+      conversion: false
+      parameters:
+        - name: "modal_action"
+          variable: "{{DLV - modal_action}}"
+        - name: "modal_type"
+          variable: "{{DLV - modal_type}}"
+
+  # ===============================================
+  # CTA_CLICK CONSOLIDÉ (remplace N events CTA)
+  # ===============================================
+  # Avant: navbar_cta_click, footer_cta_click, hero_cta, sidebar_cta...
+  # Après: 1 tag "cta_click" avec params location + type
+
+  - id: "cta_click_consolidated"
+    name: "CTA - Clic (Consolidé)"
+    category: "Lead Generation"
+    objective: "Mesurer tous les clics CTA avec segmentation"
+    enabled: false  # Utiliser ceci OU cta_click simple, pas les deux
+    consolidated: true
+
+    actions:
+      - id: "navbar"
+        description: "CTA dans la barre de navigation"
+      - id: "hero"
+        description: "CTA dans la section hero"
+      - id: "footer"
+        description: "CTA dans le footer"
+      - id: "sidebar"
+        description: "CTA dans la sidebar"
+      - id: "inline"
+        description: "CTA inline dans le contenu"
+      - id: "popup"
+        description: "CTA dans une popup"
+
+    datalayer:
+      event_name: "cta_click"
+      javascript_function: "trackCTAClick(location, ctaType, buttonText)"
+      params:
+        - name: "cta_location"
+          type: "string"
+          description: "Position du CTA sur la page"
+          values: ["navbar", "hero", "footer", "sidebar", "inline", "popup"]
+          required: true
+        - name: "cta_type"
+          type: "string"
+          description: "Type de CTA"
+          values: ["contact", "devis", "demo", "newsletter", "download"]
+          required: true
+        - name: "button_text"
+          type: "string"
+          description: "Texte du bouton"
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - cta_click"
+        condition: "event equals cta_click"
+      tag:
+        name: "GA4 - EV - CTA Click"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "cta_click"
+      conversion: true
+      parameters:
+        - name: "cta_location"
+          variable: "{{DLV - cta_location}}"
+        - name: "cta_type"
+          variable: "{{DLV - cta_type}}"
+        - name: "button_text"
+          variable: "{{DLV - button_text}}"
+
+  # ===============================================
+  # CONTACT_CLICK CONSOLIDÉ (remplace email/phone/whatsapp)
+  # ===============================================
+  # Avant: email_click, phone_click, whatsapp_click
+  # Après: 1 tag "contact_click" avec param contact_method
+
+  - id: "contact_click"
+    name: "Contact - Clic (Consolidé)"
+    category: "Contact"
+    objective: "Mesurer toutes les intentions de contact"
+    enabled: false  # Utiliser ceci OU les events séparés
+    consolidated: true
+
+    actions:
+      - id: "phone"
+        description: "Clic sur téléphone"
+        html_selector: "a[href^='tel:']"
+      - id: "email"
+        description: "Clic sur email"
+        html_selector: "a[href^='mailto:']"
+      - id: "whatsapp"
+        description: "Clic sur WhatsApp"
+        html_selector: "a[href*='wa.me']"
+
+    datalayer:
+      event_name: "contact_click"
+      javascript_function: "trackContactClick(method)"
+      params:
+        - name: "contact_method"
+          type: "string"
+          description: "Méthode de contact"
+          values: ["phone", "email", "whatsapp", "chat"]
+          required: true
+
+    gtm:
+      trigger:
+        type: "Événement personnalisé"
+        name: "EV - contact_click"
+        condition: "event equals contact_click"
+      tag:
+        name: "GA4 - EV - Contact Click"
+        type: "Événement GA4"
+
+    ga4:
+      event_name: "contact_click"
+      conversion: true
+      parameters:
+        - name: "contact_method"
+          variable: "{{DLV - contact_method}}"
+
+# =================================================
+# VARIABLES POUR EVENTS CONSOLIDÉS
+# =================================================
+
+  consolidated_variables:
+    # Video
+    - name: "DLV - video_action"
+      datalayer_name: "video_action"
+      type: "Variable de couche de données"
+
+    - name: "DLV - video_title"
+      datalayer_name: "video_title"
+      type: "Variable de couche de données"
+
+    - name: "DLV - video_progress"
+      datalayer_name: "video_progress"
+      type: "Variable de couche de données"
+
+    # FAQ
+    - name: "DLV - faq_action"
+      datalayer_name: "faq_action"
+      type: "Variable de couche de données"
+
+    - name: "DLV - faq_question"
+      datalayer_name: "faq_question"
+      type: "Variable de couche de données"
+
+    # Modal
+    - name: "DLV - modal_action"
+      datalayer_name: "modal_action"
+      type: "Variable de couche de données"
+
+    - name: "DLV - modal_type"
+      datalayer_name: "modal_type"
+      type: "Variable de couche de données"
+
+    # CTA consolidé
+    - name: "DLV - cta_type"
+      datalayer_name: "cta_type"
+      type: "Variable de couche de données"
+
+    - name: "DLV - button_text"
+      datalayer_name: "button_text"
+      type: "Variable de couche de données"
+
+    # Contact consolidé
+    - name: "DLV - contact_method"
+      datalayer_name: "contact_method"
+      type: "Variable de couche de données"

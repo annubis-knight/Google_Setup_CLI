@@ -13,7 +13,7 @@ import yaml from 'js-yaml';
 import ora from 'ora';
 import { detectGTM } from '../detectors/gtm-detector.js';
 import { detectLocalProject } from '../detectors/local-project-detector.js';
-import { loadConfig, getAuthClient } from '../utils/auth.js';
+import { loadConfig, getAuthClient, getAccountIds, getConfigPath } from '../utils/auth.js';
 
 /**
  * Liste des éléments à ne jamais supprimer (système)
@@ -42,9 +42,19 @@ export async function runClean(options = {}) {
   }
 
   // Charger la config et authentification
-  const config = loadConfig();
-  if (!config.gtmAccountId) {
-    console.log(chalk.red('❌ Configuration manquante. Lancez d\'abord: google-setup init'));
+  const { gtmAccountId, ga4AccountId } = getAccountIds();
+
+  if (!gtmAccountId) {
+    const config = loadConfig();
+    console.log(chalk.red('❌ GTM Account ID manquant dans la configuration.'));
+    console.log(chalk.gray(`   Fichier config: ${getConfigPath()}`));
+    if (config) {
+      console.log(chalk.gray(`   Contenu actuel:`));
+      console.log(chalk.gray(`   ${JSON.stringify(config, null, 2).split('\n').join('\n   ')}`));
+    } else {
+      console.log(chalk.gray(`   Le fichier n'existe pas.`));
+    }
+    console.log(chalk.yellow('\n   Lancez: google-setup init'));
     return;
   }
 
@@ -60,7 +70,7 @@ export async function runClean(options = {}) {
 
   // 1. Récupérer les données GTM
   spinner.start('Récupération des données GTM...');
-  const gtmData = await detectGTM(config.gtmAccountId, domain);
+  const gtmData = await detectGTM(gtmAccountId, domain);
 
   if (!gtmData.installed) {
     spinner.fail(`Conteneur GTM non trouvé pour ${domain}`);
@@ -76,7 +86,7 @@ export async function runClean(options = {}) {
   if (localEvents.length === 0) {
     spinner.warn('Aucun event local détecté');
     console.log(chalk.gray('   Vérifiez que vous êtes dans le bon dossier projet'));
-    console.log(chalk.gray('   ou que tracking-plan.yml / gtm-tracking.js existe'));
+    console.log(chalk.gray('   ou que tracking/gtm-tracking-plan.yml ou gtm-tracking.js existe'));
     return;
   }
 
@@ -134,8 +144,8 @@ export async function runClean(options = {}) {
 async function getLocalEvents(projectPath) {
   const events = [];
 
-  // 1. Essayer tracking-plan.yml
-  const yamlPath = resolve(projectPath, 'tracking', 'tracking-plan.yml');
+  // 1. Essayer gtm-tracking-plan.yml
+  const yamlPath = resolve(projectPath, 'tracking', 'gtm-tracking-plan.yml');
   if (existsSync(yamlPath)) {
     try {
       const yamlContent = readFileSync(yamlPath, 'utf8');
@@ -148,7 +158,7 @@ async function getLocalEvents(projectPath) {
       }
 
       if (events.length > 0) {
-        console.log(chalk.gray(`   Source: tracking/tracking-plan.yml`));
+        console.log(chalk.gray(`   Source: tracking/gtm-tracking-plan.yml`));
         return events;
       }
     } catch (e) {

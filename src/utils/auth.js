@@ -49,6 +49,22 @@ export function loadConfig() {
   return JSON.parse(readFileSync(configPath, 'utf8'));
 }
 
+/**
+ * Récupère les Account IDs depuis la config (compatible avec les deux formats)
+ * @returns {{ gtmAccountId: string|null, ga4AccountId: string|null }}
+ */
+export function getAccountIds() {
+  const config = loadConfig();
+  if (!config) {
+    return { gtmAccountId: null, ga4AccountId: null };
+  }
+
+  return {
+    gtmAccountId: config.gtmAccountId || config.credentials?.gtmAccountId || null,
+    ga4AccountId: config.ga4AccountId || config.credentials?.ga4AccountId || null
+  };
+}
+
 export function saveConfig(config) {
   const configPath = getConfigPath();
   writeFileSync(configPath, JSON.stringify(config, null, 2));

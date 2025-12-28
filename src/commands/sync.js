@@ -10,7 +10,7 @@ import boxen from 'boxen';
 import { loadConfig, getAuthClient } from '../utils/auth.js';
 import { detectGTM } from '../detectors/gtm-detector.js';
 import { detectGA4 } from '../detectors/ga4-detector.js';
-import { detectLocalProject, compareLocalWithGTM, generateSyncReport } from '../detectors/local-project-detector.js';
+import { detectLocalProject, compareLocalWithGTM } from '../detectors/local-project-detector.js';
 import { fullSync } from '../deployers/gtm-sync.js';
 
 /**
@@ -32,29 +32,25 @@ export async function runSync(options) {
   const localData = detectLocalProject(projectPath);
 
   if (!localData.found) {
-    spinnerLocal.fail('Aucun fichier GTM/tracking trouvé dans le projet');
-    console.log(chalk.gray('\nFichiers recherchés:'));
-    console.log(chalk.gray('  • gtm-head.html'));
-    console.log(chalk.gray('  • gtm-body.html'));
-    console.log(chalk.gray('  • tracking.js / gtm-tracking.js / datalayer.js'));
+    spinnerLocal.fail('Fichier gtm-tracking-plan.yml non trouvé');
+    console.log(chalk.gray('\nLe fichier tracking/gtm-tracking-plan.yml est obligatoire pour sync.'));
     console.log();
-    console.log(chalk.yellow('💡 Conseil: Lancez "google-setup deploy" pour générer ces fichiers'));
+    console.log(chalk.yellow('💡 Lancez d\'abord: google-setup init-tracking'));
+    console.log(chalk.gray('   Cela créera le fichier YAML avec les events à configurer.'));
+    console.log(chalk.gray('   Puis mettez enabled: true sur les events à synchroniser.'));
     return null;
   }
 
-  spinnerLocal.succeed('Projet local analysé');
+  spinnerLocal.succeed('Projet local analysé (source: YAML)');
 
   // Afficher les infos du projet local
   console.log();
   console.log(chalk.white.bold('📁 Projet local:'));
   console.log(chalk.gray(`   Chemin: ${localData.projectPath}`));
+  console.log(chalk.gray(`   Source: ${localData.yamlPath}`));
 
   if (localData.containerId) {
     console.log(chalk.gray(`   Container GTM: ${localData.containerId}`));
-  }
-
-  if (localData.trackingFiles.length > 0) {
-    console.log(chalk.gray(`   Fichiers tracking: ${localData.trackingFiles.length}`));
   }
 
   if (localData.dataLayerEvents.length > 0) {
@@ -176,7 +172,7 @@ export async function runSync(options) {
     const spinnerSync = ora('Synchronisation en cours...').start();
 
     const measurementId = ga4Data?.measurementId || null;
-    const syncResults = await fullSync(gtmData, comparison, measurementId);
+    const syncResults = await fullSync(gtmData, comparison, measurementId, localData.gtmConfig || []);
 
     spinnerSync.succeed('Synchronisation terminée');
 
@@ -184,16 +180,73 @@ export async function runSync(options) {
     console.log();
     console.log(chalk.white.bold('📋 Résultat:'));
 
-    if (syncResults.events.created > 0) {
-      console.log(chalk.green(`   ✅ Triggers créés: ${syncResults.events.created}`));
+    if (syncResults.triggers.created > 0) {
+      console.log(chalk.green(`   ✅ Triggers créés: ${syncResults.triggers.created}`));
+    }
+
+    if (syncResults.tags.created > 0) {
+      let tagMsg = `   ✅ Tags GA4 créés: ${syncResults.tags.created}`;
+      if (syncResults.tags.consolidated > 0) {
+        tagMsg += chalk.cyan(` (dont ${syncResults.tags.consolidated} consolidés)`);
+      }
+      console.log(chalk.green(tagMsg));
     }
 
     if (syncResults.variables.created > 0) {
       console.log(chalk.green(`   ✅ Variables créées: ${syncResults.variables.created}`));
     }
 
-    if (syncResults.events.errors > 0 || syncResults.variables.errors > 0) {
-      console.log(chalk.red(`   ❌ Erreurs: ${syncResults.events.errors + syncResults.variables.errors}`));
+    const totalErrors = syncResults.triggers.errors + syncResults.variables.errors;
+    if (totalErrors > 0) {
+      console.log(chalk.red(`   ❌ Erreurs: ${totalErrors}`));
+      console.log();
+
+      // Afficher le détail des erreurs
+      const errors = syncResults.details.filter(d => d.error);
+      if (errors.length > 0) {
+        console.log(chalk.red.bold('📋 Détail des erreurs:'));
+        console.log();
+
+        // Grouper les erreurs par type de message pour éviter la répétition
+        const errorsByMessage = {};
+        errors.forEach(err => {
+          const errorMsg = err.error || 'Erreur inconnue';
+          if (!errorsByMessage[errorMsg]) {
+            errorsByMessage[errorMsg] = [];
+          }
+          errorsByMessage[errorMsg].push(err.event || err.variable || 'Inconnu');
+        });
+
+        Object.entries(errorsByMessage).forEach(([errorMsg, items]) => {
+          // Afficher le message d'erreur
+          console.log(chalk.red(`   ⚠️  ${errorMsg}`));
+
+          // Conseil selon le type d'erreur
+          if (errorMsg.includes('already exists')) {
+            console.log(chalk.yellow(`      💡 Ces éléments existent déjà dans GTM`));
+          } else if (errorMsg.includes('permission') || errorMsg.includes('403')) {
+            console.log(chalk.yellow(`      💡 Vérifiez les permissions du Service Account`));
+          } else if (errorMsg.includes('quota') || errorMsg.includes('429')) {
+            console.log(chalk.yellow(`      💡 Quota API dépassé, réessayez plus tard`));
+          } else if (errorMsg.includes('Invalid')) {
+            console.log(chalk.yellow(`      💡 Nom invalide pour GTM (caractères spéciaux ?)`));
+          }
+
+          // Afficher les éléments concernés (max 10 pour éviter le spam)
+          const displayItems = items.slice(0, 10);
+          displayItems.forEach(item => {
+            console.log(chalk.gray(`      • ${item}`));
+          });
+          if (items.length > 10) {
+            console.log(chalk.gray(`      ... et ${items.length - 10} autres`));
+          }
+          console.log();
+        });
+      } else {
+        // Si pas d'erreurs dans details mais totalErrors > 0, afficher un message
+        console.log(chalk.gray('   (Détails des erreurs non disponibles)'));
+        console.log();
+      }
     }
 
     console.log();

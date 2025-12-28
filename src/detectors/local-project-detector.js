@@ -6,16 +6,128 @@
 import { readFileSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { globSync } from 'glob';
+import yaml from 'js-yaml';
 
 // Patterns de fichiers à rechercher
 const FILE_PATTERNS = {
   gtmHead: ['**/gtm-head.html', '**/gtm_head.html', '**/gtm.head.html'],
-  gtmBody: ['**/gtm-body.html', '**/gtm_body.html', '**/gtm.body.html'],
-  tracking: ['**/tracking.js', '**/gtm-tracking.js', '**/datalayer.js', '**/dataLayer.js']
+  gtmBody: ['**/gtm-body.html', '**/gtm_body.html', '**/gtm.body.html']
 };
 
 /**
+ * Détecte les events et variables depuis le fichier YAML
+ * Supporte les events simples ET les events consolidés
+ * @param {string} projectPath - Chemin du projet
+ * @returns {Object|null} Données extraites ou null si pas de YAML
+ */
+export function detectFromYAML(projectPath) {
+  const yamlPath = join(projectPath, 'tracking', 'gtm-tracking-plan.yml');
+
+  if (!existsSync(yamlPath)) {
+    return null;
+  }
+
+  try {
+    const content = readFileSync(yamlPath, 'utf8');
+    const config = yaml.load(content);
+
+    const result = {
+      source: 'yaml',
+      yamlPath,
+      events: [],
+      variables: [],
+      gtmConfig: [],
+      consolidatedEvents: []  // Nouveau : events consolidés
+    };
+
+    // Extraire les events simples enabled
+    for (const event of config.events || []) {
+      if (event.enabled !== true) continue;
+
+      const eventName = event.datalayer?.event_name;
+      if (eventName) {
+        result.events.push(eventName);
+        result.gtmConfig.push({
+          event: eventName,
+          triggerName: event.gtm?.trigger?.name || `EV - ${eventName}`,
+          tagName: event.gtm?.tag?.name || `GA4 - EV - ${eventName}`,
+          consolidated: false
+        });
+      }
+
+      // Extraire les variables des params
+      for (const param of event.datalayer?.params || []) {
+        if (param.name && !result.variables.includes(param.name)) {
+          result.variables.push(param.name);
+        }
+      }
+    }
+
+    // Extraire les events consolidés
+    for (const event of config.consolidated_events || []) {
+      if (event.enabled !== true) continue;
+
+      const eventName = event.datalayer?.event_name;
+      if (eventName) {
+        result.events.push(eventName);
+
+        // Récupérer les paramètres GA4 pour les ajouter au tag
+        const ga4Params = (event.ga4?.parameters || []).map(p => ({
+          name: p.name,
+          variable: p.variable
+        }));
+
+        result.gtmConfig.push({
+          event: eventName,
+          triggerName: event.gtm?.trigger?.name || `EV - ${eventName}`,
+          tagName: event.gtm?.tag?.name || `GA4 - EV - ${eventName}`,
+          consolidated: true,
+          actions: event.actions || [],
+          params: ga4Params
+        });
+
+        // Ajouter aux consolidatedEvents pour référence
+        result.consolidatedEvents.push({
+          id: event.id,
+          eventName,
+          actions: event.actions || [],
+          description: `${event.actions?.length || 0} actions consolidées`
+        });
+      }
+
+      // Extraire les variables des params
+      for (const param of event.datalayer?.params || []) {
+        if (param.name && !result.variables.includes(param.name)) {
+          result.variables.push(param.name);
+        }
+      }
+    }
+
+    // Ajouter les variables explicites de la section variables
+    for (const v of config.variables?.datalayer || []) {
+      const varName = v.datalayer_name || v.name?.replace('DLV - ', '');
+      if (varName && !result.variables.includes(varName)) {
+        result.variables.push(varName);
+      }
+    }
+
+    // Ajouter les variables des events consolidés
+    for (const v of config.consolidated_events?.consolidated_variables || []) {
+      const varName = v.datalayer_name || v.name?.replace('DLV - ', '');
+      if (varName && !result.variables.includes(varName)) {
+        result.variables.push(varName);
+      }
+    }
+
+    return result;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * Détecte les fichiers GTM et tracking dans un projet local
+ * Utilise le YAML comme source de vérité (obligatoire)
  * @param {string} projectPath - Chemin du projet (défaut: répertoire courant)
  * @returns {Object} Données du projet local
  */
@@ -31,18 +143,17 @@ export function detectLocalProject(projectPath = process.cwd()) {
     projectPath: absolutePath,
     gtmHead: null,
     gtmBody: null,
-    trackingFiles: [],
     containerId: null,
     dataLayerEvents: [],
-    dataLayerVariables: []
+    dataLayerVariables: [],
+    gtmConfig: []
   };
 
-  // Chercher gtm-head.html
+  // Chercher gtm-head.html pour extraire le Container ID
   for (const pattern of FILE_PATTERNS.gtmHead) {
     const files = globSync(pattern, { cwd: absolutePath, ignore: ['**/node_modules/**'] });
     if (files.length > 0) {
       result.gtmHead = join(absolutePath, files[0]);
-      result.found = true;
 
       // Extraire le Container ID
       const content = readFileSync(result.gtmHead, 'utf8');
@@ -59,30 +170,25 @@ export function detectLocalProject(projectPath = process.cwd()) {
     const files = globSync(pattern, { cwd: absolutePath, ignore: ['**/node_modules/**'] });
     if (files.length > 0) {
       result.gtmBody = join(absolutePath, files[0]);
-      result.found = true;
       break;
     }
   }
 
-  // Chercher les fichiers tracking/dataLayer
-  for (const pattern of FILE_PATTERNS.tracking) {
-    const files = globSync(pattern, { cwd: absolutePath, ignore: ['**/node_modules/**'] });
-    for (const file of files) {
-      const fullPath = join(absolutePath, file);
-      result.trackingFiles.push(fullPath);
-      result.found = true;
+  // YAML OBLIGATOIRE - Source de vérité pour les events et variables
+  const yamlData = detectFromYAML(absolutePath);
 
-      // Analyser le contenu pour extraire les events et variables
-      const content = readFileSync(fullPath, 'utf8');
-      const analysis = analyzeTrackingFile(content);
-      result.dataLayerEvents.push(...analysis.events);
-      result.dataLayerVariables.push(...analysis.variables);
-    }
+  if (!yamlData) {
+    // YAML absent = projet non initialisé pour sync
+    return result; // found: false
   }
 
-  // Dédupliquer
-  result.dataLayerEvents = [...new Set(result.dataLayerEvents)];
-  result.dataLayerVariables = [...new Set(result.dataLayerVariables)];
+  result.found = true;
+  result.source = yamlData.source;
+  result.yamlPath = yamlData.yamlPath;
+  result.dataLayerEvents = yamlData.events;
+  result.dataLayerVariables = yamlData.variables;
+  result.gtmConfig = yamlData.gtmConfig;
+  result.consolidatedEvents = yamlData.consolidatedEvents || [];
 
   // Chercher aussi le fichier de config local
   const localConfigPath = join(absolutePath, '.google-setup.json');
@@ -95,96 +201,6 @@ export function detectLocalProject(projectPath = process.cwd()) {
   }
 
   return result;
-}
-
-/**
- * Analyse un fichier tracking.js pour extraire les events et variables dataLayer
- * @param {string} content - Contenu du fichier
- * @returns {Object} { events: [], variables: [] }
- */
-function analyzeTrackingFile(content) {
-  const events = [];
-  const variables = [];
-
-  // Events système GTM à exclure
-  const systemEvents = ['gtm.js', 'gtm.start', 'gtm.dom', 'gtm.load', 'gtm.click', 'gtm.linkClick', 'gtm.formSubmit', 'gtm.historyChange'];
-
-  // ===== STRATÉGIE 1 : dataLayer.push direct =====
-  // Matche: dataLayer.push({ event: 'nom_event', ... })
-  const directPushPattern = /dataLayer\.push\(\s*\{[^}]*event\s*:\s*['"`]([^'"`]+)['"`]/g;
-  let match;
-  while ((match = directPushPattern.exec(content)) !== null) {
-    if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-      events.push(match[1]);
-    }
-  }
-
-  // ===== STRATÉGIE 2 : Fonctions wrapper communes =====
-  // Matche: pushEvent('xxx'), trackEvent('xxx'), sendEvent('xxx'), gtmPush('xxx'), track('xxx')
-  const wrapperPatterns = [
-    /(?:pushEvent|trackEvent|sendEvent|gtmPush|gtmEvent)\s*\(\s*['"`]([^'"`]+)['"`]/g,
-    /\.push\(\s*\{\s*event\s*:\s*(\w+)/g  // dataLayer.push({ event: eventName }) - variable
-  ];
-
-  for (const pattern of wrapperPatterns) {
-    while ((match = pattern.exec(content)) !== null) {
-      if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-        // Ignorer les noms de variables (eventName, event, etc.)
-        if (!['eventName', 'event', 'name', 'type'].includes(match[1])) {
-          events.push(match[1]);
-        }
-      }
-    }
-  }
-
-  // ===== STRATÉGIE 3 : Détection dynamique de fonction wrapper =====
-  // Cherche une fonction qui fait dataLayer.push({ event: paramName })
-  // puis cherche tous les appels à cette fonction
-  const wrapperFuncMatch = content.match(/function\s+(\w+)\s*\(\s*(\w+)(?:\s*,\s*\w+)*\s*\)\s*\{[^}]*(?:dataLayer\.push|window\.dataLayer\.push)\s*\(\s*\{[^}]*event\s*:\s*\2/);
-
-  if (wrapperFuncMatch) {
-    const funcName = wrapperFuncMatch[1];
-    // Chercher tous les appels à cette fonction
-    const callPattern = new RegExp(`${funcName}\\s*\\(\\s*['"\`]([^'"\`]+)['"\`]`, 'g');
-    while ((match = callPattern.exec(content)) !== null) {
-      if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-        events.push(match[1]);
-      }
-    }
-  }
-
-  // ===== STRATÉGIE 4 : Objets event inline =====
-  // Matche: { event: 'xxx' } dans différents contextes
-  const inlineEventPattern = /\{\s*event\s*:\s*['"`]([^'"`]+)['"`]/g;
-  while ((match = inlineEventPattern.exec(content)) !== null) {
-    if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-      events.push(match[1]);
-    }
-  }
-
-  // ===== EXTRACTION DES VARIABLES =====
-  // Pattern pour les variables dans les objets dataLayer
-  // Cherche les propriétés dans les objets { key: value }
-  const variablePattern = /(\w+)\s*:\s*(?:['"`][^'"`]*['"`]|\w+(?:\.\w+)*|{|\[)/g;
-  while ((match = variablePattern.exec(content)) !== null) {
-    const varName = match[1];
-    // Exclure les mots-clés JS, event, et propriétés système
-    const excluded = [
-      'event', 'function', 'return', 'const', 'let', 'var', 'if', 'else', 'for', 'while',
-      'true', 'false', 'null', 'undefined', 'items', 'value', 'currency', 'this', 'new',
-      'async', 'await', 'export', 'import', 'default', 'class', 'extends', 'constructor',
-      'get', 'set', 'static', 'super', 'typeof', 'instanceof', 'delete', 'void', 'yield',
-      'try', 'catch', 'finally', 'throw', 'switch', 'case', 'break', 'continue', 'do',
-      'ecommerce', 'timestamp', 'gtm', 'dataLayer', 'window', 'document', 'console',
-      'type', 'name', 'id', 'key', 'index', 'length', 'data', 'options', 'config',
-      'payload', 'params', 'args', 'callback', 'handler', 'listener', 'target', 'source'
-    ];
-    if (!excluded.includes(varName) && !variables.includes(varName) && varName.length > 2) {
-      variables.push(varName);
-    }
-  }
-
-  return { events, variables };
 }
 
 /**

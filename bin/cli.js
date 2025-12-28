@@ -10,6 +10,8 @@ import { runSync } from '../src/commands/sync.js';
 import { runInitTracking } from '../src/commands/init-tracking.js';
 import { runGenerateTracking } from '../src/commands/generate-tracking.js';
 import { runClean } from '../src/commands/clean.js';
+import { runEditConfigAuto } from '../src/commands/editconfig-auto.js';
+import { runAutoEdit } from '../src/commands/autoedit.js';
 
 const program = new Command();
 
@@ -86,6 +88,32 @@ program
   .option('--dry-run', 'Voir ce qui serait supprimé sans supprimer')
   .option('--force', 'Supprimer sans confirmation')
   .action(runClean);
+
+program
+  .command('editconfig-auto')
+  .description('Optimiser le tracking plan : consolider les events similaires')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .option('--auto', 'Appliquer automatiquement les optimisations recommandées')
+  .option('--dry-run', 'Prévisualiser sans modifier le fichier')
+  .option('--force', 'Sauvegarder sans confirmation')
+  .action(runEditConfigAuto);
+
+program
+  .command('autoedit')
+  .description('Analyser le HTML avec IA et générer le tracking plan automatiquement')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .option('-s, --source <path>', 'Chemin des fichiers HTML à scanner (défaut: même que --path)')
+  .option('--ai <model>', 'Modèle IA (gemini-flash, claude-haiku, gpt-4o-mini)')
+  .option('-n, --name <name>', 'Nom du projet')
+  .option('-d, --domain <domain>', 'Domaine du site')
+  .option('-t, --type <type>', 'Type de site (lead-gen, ecommerce, saas, media)', 'lead-gen')
+  .option('--exclude <folders>', 'Dossiers à exclure (séparés par virgules, ex: "temp,backup")')
+  .option('--include-build', 'Inclure les dossiers de build (dist, build, .next sont exclus par défaut)')
+  .option('--auto', 'Mode automatique sans confirmation')
+  .option('--dry-run', 'Prévisualiser sans sauvegarder')
+  .option('--force', 'Sauvegarder sans confirmation')
+  .option('--debug', 'Sauvegarder les réponses IA brutes dans tracking/debug/')
+  .action(runAutoEdit);
 
 // Mode interactif par défaut si aucun argument
 if (process.argv.length === 2) {

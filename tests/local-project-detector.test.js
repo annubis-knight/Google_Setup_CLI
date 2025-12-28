@@ -1,210 +1,328 @@
 /**
  * Tests pour local-project-detector.js
- * Vérifie la détection des events dataLayer avec différents patterns
+ * Vérifie la détection des events depuis le fichier YAML
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { join } from 'path';
+import { detectFromYAML, detectLocalProject } from '../src/detectors/local-project-detector.js';
 
-// On importe la fonction analyzeTrackingFile indirectement via le module
-// Pour tester, on va simuler le comportement
+// Dossier temporaire pour les tests
+const TEST_DIR = join(process.cwd(), 'test-temp-project');
+const TRACKING_DIR = join(TEST_DIR, 'tracking');
 
-// Reproduire la logique de analyzeTrackingFile pour les tests
-function analyzeTrackingFile(content) {
-  const events = [];
-  const variables = [];
+describe('detectFromYAML', () => {
 
-  const systemEvents = ['gtm.js', 'gtm.start', 'gtm.dom', 'gtm.load', 'gtm.click', 'gtm.linkClick', 'gtm.formSubmit', 'gtm.historyChange'];
-
-  // STRATÉGIE 1 : dataLayer.push direct
-  const directPushPattern = /dataLayer\.push\(\s*\{[^}]*event\s*:\s*['"`]([^'"`]+)['"`]/g;
-  let match;
-  while ((match = directPushPattern.exec(content)) !== null) {
-    if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-      events.push(match[1]);
+  beforeEach(() => {
+    // Créer le dossier de test
+    if (!existsSync(TEST_DIR)) {
+      mkdirSync(TEST_DIR, { recursive: true });
     }
-  }
-
-  // STRATÉGIE 2 : Fonctions wrapper communes
-  const wrapperPatterns = [
-    /(?:pushEvent|trackEvent|sendEvent|gtmPush|gtmEvent)\s*\(\s*['"`]([^'"`]+)['"`]/g,
-  ];
-
-  for (const pattern of wrapperPatterns) {
-    while ((match = pattern.exec(content)) !== null) {
-      if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-        if (!['eventName', 'event', 'name', 'type'].includes(match[1])) {
-          events.push(match[1]);
-        }
-      }
+    if (!existsSync(TRACKING_DIR)) {
+      mkdirSync(TRACKING_DIR, { recursive: true });
     }
-  }
+  });
 
-  // STRATÉGIE 3 : Détection dynamique de fonction wrapper
-  const wrapperFuncMatch = content.match(/function\s+(\w+)\s*\(\s*(\w+)(?:\s*,\s*\w+)*\s*\)\s*\{[^}]*(?:dataLayer\.push|window\.dataLayer\.push)\s*\(\s*\{[^}]*event\s*:\s*\2/);
-
-  if (wrapperFuncMatch) {
-    const funcName = wrapperFuncMatch[1];
-    const callPattern = new RegExp(`${funcName}\\s*\\(\\s*['"\`]([^'"\`]+)['"\`]`, 'g');
-    while ((match = callPattern.exec(content)) !== null) {
-      if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-        events.push(match[1]);
-      }
+  afterEach(() => {
+    // Nettoyer le dossier de test
+    if (existsSync(TEST_DIR)) {
+      rmSync(TEST_DIR, { recursive: true, force: true });
     }
-  }
+  });
 
-  // STRATÉGIE 4 : Objets event inline
-  const inlineEventPattern = /\{\s*event\s*:\s*['"`]([^'"`]+)['"`]/g;
-  while ((match = inlineEventPattern.exec(content)) !== null) {
-    if (match[1] && !events.includes(match[1]) && !systemEvents.includes(match[1])) {
-      events.push(match[1]);
+  it('retourne null si le fichier YAML n\'existe pas', () => {
+    const result = detectFromYAML(TEST_DIR);
+    expect(result).toBeNull();
+  });
+
+  it('extrait les events enabled du YAML', () => {
+    const yamlContent = `
+events:
+  - id: "cta_click"
+    enabled: true
+    datalayer:
+      event_name: "clic_cta"
+  - id: "form_submit"
+    enabled: true
+    datalayer:
+      event_name: "form_submit"
+  - id: "disabled_event"
+    enabled: false
+    datalayer:
+      event_name: "should_not_appear"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    expect(result).not.toBeNull();
+    expect(result.events).toContain('clic_cta');
+    expect(result.events).toContain('form_submit');
+    expect(result.events).not.toContain('should_not_appear');
+  });
+
+  it('extrait les variables des params', () => {
+    const yamlContent = `
+events:
+  - id: "cta_click"
+    enabled: true
+    datalayer:
+      event_name: "clic_cta"
+      params:
+        - name: "cta_location"
+        - name: "cta_text"
+  - id: "form_submit"
+    enabled: true
+    datalayer:
+      event_name: "form_submit"
+      params:
+        - name: "form_name"
+        - name: "lead_value"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    expect(result.variables).toContain('cta_location');
+    expect(result.variables).toContain('cta_text');
+    expect(result.variables).toContain('form_name');
+    expect(result.variables).toContain('lead_value');
+  });
+
+  it('extrait les variables de la section variables.datalayer', () => {
+    const yamlContent = `
+events:
+  - id: "cta_click"
+    enabled: true
+    datalayer:
+      event_name: "clic_cta"
+
+variables:
+  datalayer:
+    - name: "DLV - scroll_percent"
+      datalayer_name: "scroll_percent"
+    - name: "DLV - user_type"
+      datalayer_name: "user_type"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    expect(result.variables).toContain('scroll_percent');
+    expect(result.variables).toContain('user_type');
+  });
+
+  it('génère la config GTM avec les noms personnalisés', () => {
+    const yamlContent = `
+events:
+  - id: "cta_click"
+    enabled: true
+    datalayer:
+      event_name: "clic_cta"
+    gtm:
+      trigger:
+        name: "EV - clic_cta"
+      tag:
+        name: "GA4 - EV - CTA Click"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    expect(result.gtmConfig).toHaveLength(1);
+    expect(result.gtmConfig[0]).toEqual({
+      event: 'clic_cta',
+      triggerName: 'EV - clic_cta',
+      tagName: 'GA4 - EV - CTA Click',
+      consolidated: false
+    });
+  });
+
+  it('utilise des noms par défaut si non spécifiés dans GTM', () => {
+    const yamlContent = `
+events:
+  - id: "cta_click"
+    enabled: true
+    datalayer:
+      event_name: "clic_cta"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    expect(result.gtmConfig[0].triggerName).toBe('EV - clic_cta');
+    expect(result.gtmConfig[0].tagName).toBe('GA4 - EV - clic_cta');
+    expect(result.gtmConfig[0].consolidated).toBe(false);
+  });
+
+  it('ne duplique pas les variables', () => {
+    const yamlContent = `
+events:
+  - id: "event1"
+    enabled: true
+    datalayer:
+      event_name: "event1"
+      params:
+        - name: "shared_var"
+  - id: "event2"
+    enabled: true
+    datalayer:
+      event_name: "event2"
+      params:
+        - name: "shared_var"
+
+variables:
+  datalayer:
+    - datalayer_name: "shared_var"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    const count = result.variables.filter(v => v === 'shared_var').length;
+    expect(count).toBe(1);
+  });
+
+  it('extrait les events consolidés avec leurs actions', () => {
+    const yamlContent = `
+events:
+  - id: "simple_event"
+    enabled: true
+    datalayer:
+      event_name: "simple_event"
+
+consolidated_events:
+  - id: "video_interaction"
+    enabled: true
+    consolidated: true
+    actions:
+      - id: "start"
+        description: "Video started"
+      - id: "complete"
+        description: "Video completed"
+    datalayer:
+      event_name: "video_interaction"
+      params:
+        - name: "video_action"
+        - name: "video_title"
+    ga4:
+      parameters:
+        - name: "video_action"
+          variable: "{{DLV - video_action}}"
+        - name: "video_title"
+          variable: "{{DLV - video_title}}"
+    gtm:
+      trigger:
+        name: "EV - video_interaction"
+      tag:
+        name: "GA4 - EV - Video Interaction"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    // Should have both simple and consolidated events
+    expect(result.events).toContain('simple_event');
+    expect(result.events).toContain('video_interaction');
+    expect(result.events).toHaveLength(2);
+
+    // Check consolidated event config
+    const consolidatedConfig = result.gtmConfig.find(c => c.event === 'video_interaction');
+    expect(consolidatedConfig).toBeDefined();
+    expect(consolidatedConfig.consolidated).toBe(true);
+    expect(consolidatedConfig.actions).toHaveLength(2);
+    expect(consolidatedConfig.params).toHaveLength(2);
+
+    // Check consolidatedEvents array
+    expect(result.consolidatedEvents).toHaveLength(1);
+    expect(result.consolidatedEvents[0].id).toBe('video_interaction');
+    expect(result.consolidatedEvents[0].actions).toHaveLength(2);
+  });
+
+  it('extrait les variables des events consolidés', () => {
+    const yamlContent = `
+consolidated_events:
+  - id: "faq_interaction"
+    enabled: true
+    datalayer:
+      event_name: "faq_interaction"
+      params:
+        - name: "faq_action"
+        - name: "faq_question"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectFromYAML(TEST_DIR);
+
+    expect(result.variables).toContain('faq_action');
+    expect(result.variables).toContain('faq_question');
+  });
+
+});
+
+describe('detectLocalProject', () => {
+
+  beforeEach(() => {
+    if (!existsSync(TEST_DIR)) {
+      mkdirSync(TEST_DIR, { recursive: true });
     }
-  }
-
-  return { events, variables };
-}
-
-describe('analyzeTrackingFile', () => {
-
-  describe('Stratégie 1: dataLayer.push direct', () => {
-    it('détecte dataLayer.push({ event: "xxx" })', () => {
-      const content = `
-        dataLayer.push({ event: 'clic_cta' });
-        dataLayer.push({ event: "form_submit", form_name: "contact" });
-      `;
-      const result = analyzeTrackingFile(content);
-      expect(result.events).toContain('clic_cta');
-      expect(result.events).toContain('form_submit');
-    });
-
-    it('exclut les events système GTM', () => {
-      const content = `
-        dataLayer.push({ event: 'gtm.js' });
-        dataLayer.push({ event: 'gtm.start' });
-        dataLayer.push({ event: 'real_event' });
-      `;
-      const result = analyzeTrackingFile(content);
-      expect(result.events).not.toContain('gtm.js');
-      expect(result.events).not.toContain('gtm.start');
-      expect(result.events).toContain('real_event');
-    });
+    if (!existsSync(TRACKING_DIR)) {
+      mkdirSync(TRACKING_DIR, { recursive: true });
+    }
   });
 
-  describe('Stratégie 2: Fonctions wrapper communes', () => {
-    it('détecte pushEvent("xxx")', () => {
-      const content = `
-        pushEvent('clic_cta_devis', { location: 'hero' });
-        pushEvent('contact_click', { method: 'phone' });
-      `;
-      const result = analyzeTrackingFile(content);
-      expect(result.events).toContain('clic_cta_devis');
-      expect(result.events).toContain('contact_click');
-    });
-
-    it('détecte trackEvent("xxx")', () => {
-      const content = `
-        trackEvent('page_view');
-        trackEvent('button_click', { button: 'submit' });
-      `;
-      const result = analyzeTrackingFile(content);
-      expect(result.events).toContain('page_view');
-      expect(result.events).toContain('button_click');
-    });
-
-    it('détecte sendEvent("xxx")', () => {
-      const content = `
-        sendEvent('newsletter_signup');
-      `;
-      const result = analyzeTrackingFile(content);
-      expect(result.events).toContain('newsletter_signup');
-    });
+  afterEach(() => {
+    if (existsSync(TEST_DIR)) {
+      rmSync(TEST_DIR, { recursive: true, force: true });
+    }
   });
 
-  describe('Stratégie 3: Détection dynamique de wrapper', () => {
-    it('détecte une fonction wrapper simple et ses appels', () => {
-      // Note: La détection dynamique fonctionne pour les wrappers sur une ligne
-      // Pour les wrappers complexes, on s'appuie sur les noms courants (pushEvent, trackEvent, etc.)
-      const content = `function track(eventName) { dataLayer.push({ event: eventName }); }
-        track('custom_event_1');
-        track('custom_event_2');
-      `;
-      const result = analyzeTrackingFile(content);
-      expect(result.events).toContain('custom_event_1');
-      expect(result.events).toContain('custom_event_2');
-    });
+  it('retourne found: false si le YAML n\'existe pas', () => {
+    const result = detectLocalProject(TEST_DIR);
+    expect(result.found).toBe(false);
   });
 
-  describe('Stratégie 4: Objets event inline', () => {
-    it('détecte { event: "xxx" } dans différents contextes', () => {
-      const content = `
-        const eventData = { event: 'inline_event', data: 'test' };
-        return { event: 'another_event' };
-      `;
-      const result = analyzeTrackingFile(content);
-      expect(result.events).toContain('inline_event');
-      expect(result.events).toContain('another_event');
-    });
+  it('retourne found: true si le YAML existe avec des events enabled', () => {
+    const yamlContent = `
+events:
+  - id: "cta_click"
+    enabled: true
+    datalayer:
+      event_name: "clic_cta"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
+
+    const result = detectLocalProject(TEST_DIR);
+
+    expect(result.found).toBe(true);
+    expect(result.source).toBe('yaml');
+    expect(result.dataLayerEvents).toContain('clic_cta');
   });
 
-  describe('Cas réel: fichier gtm-tracking.js EliSun', () => {
-    it('détecte tous les events du fichier client', () => {
-      const content = `
-        function pushEvent(eventName, eventData = {}) {
-          const payload = {
-            event: eventName,
-            ...eventData,
-            timestamp: new Date().toISOString()
-          };
-          window.dataLayer.push(payload);
-        }
+  it('détecte le container ID depuis gtm-head.html', () => {
+    const yamlContent = `
+events:
+  - id: "cta_click"
+    enabled: true
+    datalayer:
+      event_name: "clic_cta"
+`;
+    writeFileSync(join(TRACKING_DIR, 'gtm-tracking-plan.yml'), yamlContent);
 
-        export function trackCTADevis(location) {
-          pushEvent('clic_cta_devis', { cta_location: location });
-        }
+    // Créer un fichier gtm-head.html
+    const gtmHeadContent = `<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-ABC123');</script>
+<!-- End Google Tag Manager -->`;
+    writeFileSync(join(TEST_DIR, 'gtm-head.html'), gtmHeadContent);
 
-        export function trackPhoneClick() {
-          pushEvent('contact_click', { contact_method: 'telephone' });
-        }
+    const result = detectLocalProject(TEST_DIR);
 
-        export function trackModalOpen(source = 'unknown') {
-          pushEvent('modal_devis_open', { modal_source: source });
-        }
-
-        export function trackFormSubmit(formData = {}) {
-          pushEvent('generate_lead', { form_name: 'devis' });
-        }
-
-        export function trackKitSelection(power) {
-          pushEvent('selection_kit', { kit_power: power });
-        }
-
-        export function trackScrollDepth() {
-          pushEvent('scroll_depth', { scroll_percent: 50 });
-        }
-      `;
-
-      const result = analyzeTrackingFile(content);
-
-      // Tous les events du fichier EliSun doivent être détectés
-      expect(result.events).toContain('clic_cta_devis');
-      expect(result.events).toContain('contact_click');
-      expect(result.events).toContain('modal_devis_open');
-      expect(result.events).toContain('generate_lead');
-      expect(result.events).toContain('selection_kit');
-      expect(result.events).toContain('scroll_depth');
-    });
-  });
-
-  describe('Dédoublonnage', () => {
-    it('ne retourne pas de doublons', () => {
-      const content = `
-        pushEvent('same_event');
-        pushEvent('same_event');
-        dataLayer.push({ event: 'same_event' });
-      `;
-      const result = analyzeTrackingFile(content);
-      const count = result.events.filter(e => e === 'same_event').length;
-      expect(count).toBe(1);
-    });
+    expect(result.containerId).toBe('GTM-ABC123');
   });
 
 });

@@ -213,23 +213,23 @@ cd /mon-projet-existant
 google-setup init-tracking
 
 # 3. Éditer le YAML pour activer les events voulus
-#    → Ouvrez tracking/tracking-plan.yml
+#    → Ouvrez tracking/gtm-tracking-plan.yml
 #    → Mettez enabled: true sur les events à utiliser
 
 # 4. Générer le code JavaScript
 google-setup generate-tracking --force
 
-# 5. Le fichier gtm-tracking.js est prêt à l'emploi !
+# 5. Le fichier tracking/gtm-tracking.js est prêt à l'emploi !
 ```
 
 **Fichiers générés :**
 
 ```
 mon-projet/
-├── tracking/
-│   ├── tracking-plan.yml    ← Configuration (source de vérité)
-│   └── tracking-plan.md     ← Documentation lisible
-└── gtm-tracking.js          ← Code JS prêt à utiliser
+└── tracking/
+    ├── gtm-tracking-plan.yml    ← Configuration (source de vérité)
+    ├── gtm-tracking-plan.md     ← Documentation lisible
+    └── gtm-tracking.js          ← Code JS prêt à utiliser
 ```
 
 ---
@@ -445,7 +445,7 @@ Audit & Déploiement automatique Google Analytics
 
 ### Template modulable
 
-Le fichier `tracking-plan.yml` contient **tous les events possibles** avec un flag `enabled: true/false` :
+Le fichier `gtm-tracking-plan.yml` contient **tous les events possibles** avec un flag `enabled: true/false` :
 
 ```yaml
 events:
@@ -480,16 +480,16 @@ events:
 ```
 mon-projet/
 ├── tracking/
-│   ├── tracking-plan.yml      # Source de vérité (config)
-│   └── tracking-plan.md       # Documentation client
-├── gtm-tracking.js            # Code JS auto-généré
+│   ├── gtm-tracking-plan.yml  # Source de vérité (config)
+│   ├── gtm-tracking-plan.md   # Documentation client
+│   └── gtm-tracking.js        # Code JS auto-généré
 ├── components/
 │   ├── gtm-head.html          # Script GTM pour <head>
 │   └── gtm-body.html          # Noscript pour <body>
 └── .google-setup.json         # Config locale du projet
 ```
 
-### Le fichier tracking-plan.yml
+### Le fichier gtm-tracking-plan.yml
 
 ```yaml
 project:
@@ -581,7 +581,7 @@ export function initScrollTracking() {
 
   <!-- Avant </body> -->
   <script type="module">
-    import { initAutoTracking, initScrollTracking } from './gtm-tracking.js';
+    import { initAutoTracking, initScrollTracking } from './tracking/gtm-tracking.js';
     initAutoTracking();
     initScrollTracking();
   </script>
@@ -654,6 +654,67 @@ GA4 → GTM → DataLayer → Conversions
 ```
 
 Si GA4 n'est pas configuré, GTM sera "bloqué". Utilisez `continue` pour déployer dans l'ordre.
+
+### Comment déployer le tracking avec Firebase ?
+
+Le fichier `tracking/gtm-tracking.js` doit être accessible depuis le navigateur. Voici comment l'intégrer selon votre architecture :
+
+**Option 1 : Site statique (Firebase Hosting)**
+
+```bash
+# Structure de votre projet
+mon-projet/
+├── public/                    # ou dist/
+│   ├── index.html
+│   └── tracking/
+│       └── gtm-tracking.js    # ← Copier le fichier ici
+└── tracking/
+    ├── gtm-tracking-plan.yml
+    └── gtm-tracking.js        # ← Source générée
+```
+
+```bash
+# Copier avant déploiement
+cp tracking/gtm-tracking.js public/tracking/
+firebase deploy
+```
+
+**Option 2 : Framework (Vite, Next.js, Nuxt...)**
+
+Importez directement depuis `tracking/` :
+
+```javascript
+// src/main.js ou app.js
+import { initAutoTracking, trackCTA } from '../tracking/gtm-tracking.js';
+
+initAutoTracking();
+
+// Le bundler incluera le code dans votre build
+```
+
+**Option 3 : Firebase Functions (SSR)**
+
+```bash
+mon-projet/
+├── functions/
+│   └── src/
+└── public/
+    └── tracking/
+        └── gtm-tracking.js    # ← Pour le client-side
+```
+
+Le tracking s'exécute côté client, donc le fichier doit être servi par Firebase Hosting (pas Functions).
+
+**Conseil** : Ajoutez la copie dans votre script de build :
+
+```json
+// package.json
+{
+  "scripts": {
+    "build": "vite build && cp tracking/gtm-tracking.js dist/tracking/"
+  }
+}
+```
 
 ---
 

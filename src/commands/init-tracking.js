@@ -141,7 +141,7 @@ export async function runInitTracking(options) {
 
   try {
     // YAML
-    let yamlContent = loadTemplate('tracking-plan.yml');
+    let yamlContent = loadTemplate('gtm-tracking-plan.yml');
     yamlContent = yamlContent
       .replace(/^  name: ""$/m, `  name: "${answers.projectName}"`)
       .replace(/^  domain: ""$/m, `  domain: "${answers.domain}"`)
@@ -153,7 +153,7 @@ export async function runInitTracking(options) {
     console.log(chalk.green(`   ✓ ${outputDir}/gtm-tracking-plan.yml`));
 
     // Markdown
-    let mdContent = loadTemplate('tracking-plan.md');
+    let mdContent = loadTemplate('gtm-tracking-plan.md');
     mdContent = replacePlaceholders(mdContent, answers);
     writeFileSync(mdPath, mdContent);
     console.log(chalk.green(`   ✓ ${outputDir}/gtm-tracking-plan.md`));

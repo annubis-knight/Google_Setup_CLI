@@ -18,8 +18,8 @@ export async function runGenerateTracking(options = {}) {
   const trackingDir = options.input || 'tracking';
   const outputFile = options.output || 'gtm-tracking.js';
 
-  const yamlPath = join(projectPath, trackingDir, 'tracking-plan.yml');
-  const outputPath = join(projectPath, outputFile);
+  const yamlPath = join(projectPath, trackingDir, 'gtm-tracking-plan.yml');
+  const outputPath = join(projectPath, trackingDir, outputFile);
 
   console.log(chalk.cyan('\n📝 Génération du fichier gtm-tracking.js\n'));
 
@@ -29,7 +29,7 @@ export async function runGenerateTracking(options = {}) {
     console.log(chalk.red(`❌ Dossier non trouvé: ${trackingDirPath}`));
     console.log(chalk.yellow('\n💡 Étapes à suivre:'));
     console.log(chalk.gray('   1. Lancez: google-setup init-tracking'));
-    console.log(chalk.gray('   2. Éditez tracking/tracking-plan.yml (enabled: true/false)'));
+    console.log(chalk.gray('   2. Éditez tracking/gtm-tracking-plan.yml (enabled: true/false)'));
     console.log(chalk.gray('   3. Relancez: google-setup generate-tracking'));
     return;
   }
@@ -37,7 +37,7 @@ export async function runGenerateTracking(options = {}) {
   // Vérifier que le YAML existe
   if (!existsSync(yamlPath)) {
     console.log(chalk.red(`❌ Fichier non trouvé: ${yamlPath}`));
-    console.log(chalk.yellow('\n💡 Le dossier tracking/ existe mais pas le fichier YAML.'));
+    console.log(chalk.yellow('\n💡 Le dossier tracking/ existe mais pas le fichier gtm-tracking-plan.yml'));
     console.log(chalk.gray('   Lancez: google-setup init-tracking'));
     return;
   }
@@ -65,7 +65,7 @@ export async function runGenerateTracking(options = {}) {
   const enabledEvents = (config.events || []).filter(e => e.enabled === true);
 
   if (enabledEvents.length === 0) {
-    console.log(chalk.yellow('⚠️  Aucun event activé dans le tracking-plan.yml'));
+    console.log(chalk.yellow('⚠️  Aucun event activé dans le gtm-tracking-plan.yml'));
     console.log(chalk.gray('   Mettez enabled: true sur les events à générer.'));
     return;
   }
