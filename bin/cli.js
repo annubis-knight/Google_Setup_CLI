@@ -11,9 +11,7 @@ import { runInitTracking } from '../src/commands/init-tracking.js';
 import { runEventSetup } from '../src/commands/event-setup.js';
 import { runGtmConfigSetup } from '../src/commands/gtm-config-setup.js';
 import { runHtmlLayer } from '../src/commands/html-layer.js';
-import { runGenerateTracking } from '../src/commands/generate-tracking.js';
 import { runClean } from '../src/commands/clean.js';
-import { runEditConfigAuto } from '../src/commands/editconfig-auto.js';
 import { runAutoEdit } from '../src/commands/autoedit.js';
 
 const program = new Command();
@@ -97,17 +95,8 @@ program
   .action(runHtmlLayer);
 
 // ============================================
-// COMMANDES LEGACY (compatibilité)
+// COMMANDES UTILITAIRES
 // ============================================
-
-program
-  .command('generate-tracking')
-  .description('Générer gtm-tracking.js à partir du tracking-plan.yml')
-  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
-  .option('-i, --input <dir>', 'Dossier du YAML (défaut: tracking)')
-  .option('-o, --output <file>', 'Fichier de sortie (défaut: gtm-tracking.js)')
-  .option('--force', 'Écraser si le fichier existe')
-  .action(runGenerateTracking);
 
 program
   .command('clean')
@@ -117,15 +106,6 @@ program
   .option('--dry-run', 'Voir ce qui serait supprimé sans supprimer')
   .option('--force', 'Supprimer sans confirmation')
   .action(runClean);
-
-program
-  .command('editconfig-auto')
-  .description('Optimiser le tracking plan : consolider les events similaires')
-  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
-  .option('--auto', 'Appliquer automatiquement les optimisations recommandées')
-  .option('--dry-run', 'Prévisualiser sans modifier le fichier')
-  .option('--force', 'Sauvegarder sans confirmation')
-  .action(runEditConfigAuto);
 
 program
   .command('autoedit')
