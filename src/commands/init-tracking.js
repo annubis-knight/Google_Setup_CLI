@@ -1,6 +1,6 @@
 /**
- * Commande init-tracking
- * Génère les fichiers de plan de taggage (YAML + MD) dans le projet
+ * Commande init-tracking (Étape 1)
+ * Déploie le dossier tracking/ avec le template tracking-events.yaml
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
@@ -8,7 +8,6 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { detectLocalProject } from '../detectors/local-project-detector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,43 +21,24 @@ function loadTemplate(templateName) {
 }
 
 /**
- * Remplace les placeholders dans un template
+ * Charge la config locale .google-setup.json si elle existe
  */
-function replacePlaceholders(content, data) {
-  return content
-    .replace(/\{\{PROJECT_NAME\}\}/g, data.projectName || '')
-    .replace(/\{\{DOMAIN\}\}/g, data.domain || '')
-    .replace(/\{\{GA4_MEASUREMENT_ID\}\}/g, data.ga4Id || '')
-    .replace(/\{\{GTM_CONTAINER_ID\}\}/g, data.gtmId || '')
-    .replace(/\{\{DATE\}\}/g, new Date().toISOString().split('T')[0]);
-}
-
-/**
- * Détecte les infos existantes dans le projet
- */
-function detectExistingInfo(projectPath) {
-  const localProject = detectLocalProject(projectPath);
-  const info = {
-    gtmId: localProject.containerId || '',
-    projectName: '',
-    domain: ''
-  };
-
-  // Essayer de lire .google-setup.json
+function loadLocalConfig(projectPath) {
   const configPath = join(projectPath, '.google-setup.json');
   if (existsSync(configPath)) {
     try {
       const config = JSON.parse(readFileSync(configPath, 'utf8'));
-      info.projectName = config.projectName || '';
-      info.domain = config.domain || '';
-      info.ga4Id = config.ga4MeasurementId || '';
-      info.gtmId = config.gtmContainerId || info.gtmId;
+      return {
+        projectName: config.projectName || '',
+        domain: config.domain || '',
+        ga4Id: config.ga4?.measurementId || config.ga4MeasurementId || '',
+        gtmId: config.gtm?.containerId || config.gtmContainerId || ''
+      };
     } catch (e) {
-      // Ignore
+      return null;
     }
   }
-
-  return info;
+  return null;
 }
 
 /**
@@ -66,28 +46,27 @@ function detectExistingInfo(projectPath) {
  */
 export async function runInitTracking(options) {
   const projectPath = options.path || process.cwd();
-  const outputDir = options.output || 'tracking';
+  const outputDir = 'tracking';
+  const debugDir = 'tracking/debug';
   const force = options.force || false;
 
   console.log();
-  console.log(chalk.cyan.bold('📋 Initialisation du Plan de Taggage'));
+  console.log(chalk.cyan.bold('📋 [Étape 1/5] Initialisation du Tracking'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
-  // Vérifier si les fichiers existent déjà
-  const yamlPath = join(projectPath, outputDir, 'gtm-tracking-plan.yml');
-  const mdPath = join(projectPath, outputDir, 'gtm-tracking-plan.md');
+  // Vérifier si tracking-events.yaml existe déjà
+  const yamlPath = join(projectPath, outputDir, 'tracking-events.yaml');
 
-  if (!force && (existsSync(yamlPath) || existsSync(mdPath))) {
-    console.log(chalk.yellow('⚠️  Des fichiers de plan de taggage existent déjà :'));
-    if (existsSync(yamlPath)) console.log(chalk.gray(`   • ${yamlPath}`));
-    if (existsSync(mdPath)) console.log(chalk.gray(`   • ${mdPath}`));
+  if (!force && existsSync(yamlPath)) {
+    console.log(chalk.yellow('⚠️  Le fichier tracking-events.yaml existe déjà :'));
+    console.log(chalk.gray(`   • ${yamlPath}`));
     console.log();
 
     const { overwrite } = await inquirer.prompt([{
       type: 'confirm',
       name: 'overwrite',
-      message: 'Voulez-vous les écraser ?',
+      message: 'Voulez-vous l\'écraser ?',
       default: false
     }]);
 
@@ -97,66 +76,94 @@ export async function runInitTracking(options) {
     }
   }
 
-  // Détecter les infos existantes
-  const existingInfo = detectExistingInfo(projectPath);
+  // Charger la config locale si elle existe
+  const localConfig = loadLocalConfig(projectPath);
 
-  // Demander les infos du projet
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'projectName',
-      message: 'Nom du projet :',
-      default: existingInfo.projectName || projectPath.split(/[/\\]/).pop()
-    },
-    {
-      type: 'input',
-      name: 'domain',
-      message: 'Domaine :',
-      default: existingInfo.domain,
-      validate: v => v.length > 0 || 'Domaine requis'
-    },
-    {
-      type: 'input',
-      name: 'ga4Id',
-      message: 'GA4 Measurement ID (G-XXXXXXXXXX) :',
-      default: existingInfo.ga4Id
-    },
-    {
-      type: 'input',
-      name: 'gtmId',
-      message: 'GTM Container ID (GTM-XXXXXXX) :',
-      default: existingInfo.gtmId
-    }
-  ]);
+  let projectName, domain, ga4Id, gtmId;
 
-  // Créer le dossier de sortie
+  if (localConfig && localConfig.projectName && localConfig.domain) {
+    // Config locale trouvée - utiliser directement
+    console.log(chalk.green('✓ Configuration locale détectée (.google-setup.json)'));
+    console.log(chalk.gray(`   Projet: ${localConfig.projectName}`));
+    console.log(chalk.gray(`   Domaine: ${localConfig.domain}`));
+    if (localConfig.ga4Id) console.log(chalk.gray(`   GA4: ${localConfig.ga4Id}`));
+    if (localConfig.gtmId) console.log(chalk.gray(`   GTM: ${localConfig.gtmId}`));
+    console.log();
+
+    projectName = localConfig.projectName;
+    domain = localConfig.domain;
+    ga4Id = localConfig.ga4Id || '';
+    gtmId = localConfig.gtmId || '';
+  } else {
+    // Pas de config locale - demander les infos
+    const answers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'projectName',
+        message: 'Nom du projet :',
+        default: projectPath.split(/[/\\]/).pop()
+      },
+      {
+        type: 'input',
+        name: 'domain',
+        message: 'Domaine :',
+        validate: v => v.length > 0 || 'Domaine requis'
+      },
+      {
+        type: 'input',
+        name: 'ga4Id',
+        message: 'GA4 Measurement ID (G-XXXXXXXXXX) - optionnel :',
+        default: ''
+      },
+      {
+        type: 'input',
+        name: 'gtmId',
+        message: 'GTM Container ID (GTM-XXXXXXX) - optionnel :',
+        default: ''
+      }
+    ]);
+
+    projectName = answers.projectName;
+    domain = answers.domain;
+    ga4Id = answers.ga4Id;
+    gtmId = answers.gtmId;
+  }
+
+  // Créer les dossiers
   const fullOutputDir = join(projectPath, outputDir);
+  const fullDebugDir = join(projectPath, debugDir);
+
   if (!existsSync(fullOutputDir)) {
     mkdirSync(fullOutputDir, { recursive: true });
   }
+  if (!existsSync(fullDebugDir)) {
+    mkdirSync(fullDebugDir, { recursive: true });
+  }
 
-  // Charger et personnaliser les templates
+  // Charger et personnaliser le template
   console.log();
   console.log(chalk.cyan('📝 Génération des fichiers...'));
 
   try {
-    // YAML
-    let yamlContent = loadTemplate('gtm-tracking-plan.yml');
+    // Charger tracking-events.yaml
+    let yamlContent = loadTemplate('tracking-events.yaml');
+
+    // Remplacer les placeholders dans la section project
     yamlContent = yamlContent
-      .replace(/^  name: ""$/m, `  name: "${answers.projectName}"`)
-      .replace(/^  domain: ""$/m, `  domain: "${answers.domain}"`)
-      .replace(/^  ga4_measurement_id: ""$/m, `  ga4_measurement_id: "${answers.ga4Id}"`)
-      .replace(/^  gtm_container_id: ""$/m, `  gtm_container_id: "${answers.gtmId}"`)
-      .replace(/^  updated: ""$/m, `  updated: "${new Date().toISOString().split('T')[0]}"`);
+      .replace(/^  name: ""$/m, `  name: "${projectName}"`)
+      .replace(/^  gtm_container_id: ""$/m, `  gtm_container_id: "${gtmId}"`)
+      .replace(/^  ga4_measurement_id: ""$/m, `  ga4_measurement_id: "${ga4Id}"`)
+      .replace(/\{\{DOMAIN\}\}/g, domain);
 
     writeFileSync(yamlPath, yamlContent);
-    console.log(chalk.green(`   ✓ ${outputDir}/gtm-tracking-plan.yml`));
+    console.log(chalk.green(`   ✓ ${outputDir}/tracking-events.yaml (56 events)`));
 
-    // Markdown
-    let mdContent = loadTemplate('gtm-tracking-plan.md');
-    mdContent = replacePlaceholders(mdContent, answers);
-    writeFileSync(mdPath, mdContent);
-    console.log(chalk.green(`   ✓ ${outputDir}/gtm-tracking-plan.md`));
+    // Créer un fichier .gitkeep dans debug/
+    const gitkeepPath = join(fullDebugDir, '.gitkeep');
+    if (!existsSync(gitkeepPath)) {
+      writeFileSync(gitkeepPath, '');
+      console.log(chalk.green(`   ✓ ${debugDir}/.gitkeep`));
+    }
 
   } catch (error) {
     console.error(chalk.red(`   ✗ Erreur: ${error.message}`));
@@ -164,12 +171,13 @@ export async function runInitTracking(options) {
   }
 
   console.log();
-  console.log(chalk.green.bold('✅ Plan de taggage initialisé !'));
+  console.log(chalk.green.bold('✅ Tracking initialisé !'));
   console.log();
   console.log(chalk.white('Prochaines étapes :'));
-  console.log(chalk.gray(`   1. Éditez ${outputDir}/gtm-tracking-plan.yml`));
-  console.log(chalk.gray('   2. Activez/désactivez les events selon vos besoins (enabled: true/false)'));
-  console.log(chalk.gray('   3. Lancez: google-setup sync pour créer les triggers/variables dans GTM'));
+  console.log(chalk.gray('   [Étape 2] google-setup event-setup     → Sélectionner les events à tracker'));
+  console.log(chalk.gray('   [Étape 3] google-setup gtm-config-setup → Générer la config GTM'));
+  console.log(chalk.gray('   [Étape 4] google-setup deploy           → Déployer dans GTM'));
+  console.log(chalk.gray('   [Étape 5] google-setup html-layer       → Ajouter les attributs HTML'));
   console.log();
 }
 

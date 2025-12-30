@@ -1,5 +1,10 @@
 /**
  * Client IA multi-modèles pour l'analyse de tracking
+ * Pipeline: 3 étapes IA
+ *   1. Analyse métier → Identifier les events pertinents
+ *   2. Grouping → Consolider les events similaires
+ *   3. YAML Generation → Générer la configuration finale
+ *
  * Supporte: Gemini Flash (défaut), Claude Haiku, GPT-4o-mini
  */
 
@@ -26,7 +31,7 @@ const AI_MODELS = {
     provider: 'google',
     model: 'gemini-2.0-flash-exp',
     envKey: 'GOOGLE_AI_API_KEY',
-    costPer1kTokens: 0.000075, // Très économique
+    costPer1kTokens: 0.000075,
     maxTokens: 8192
   },
   'gemini-pro': {
@@ -55,94 +60,365 @@ const AI_MODELS = {
   }
 };
 
-/**
- * Prompt système pour l'analyse de tracking
- */
-const SYSTEM_PROMPT = `Tu es un expert Google Tag Manager et Google Analytics 4.
-Ta mission est d'analyser la structure HTML d'un site web et de MODIFIER un fichier YAML existant pour y ajouter les events pertinents.
-
-RÈGLES CRITIQUES:
-1. Tu DOIS conserver EXACTEMENT la structure et le format du YAML template fourni
-2. Tu ne fais QUE activer (enabled: true) ou ajouter des events dans les sections existantes
-3. CONSOLIDE les événements similaires dans la section "consolidated_events" existante
-4. Garde SÉPARÉS les événements de conversion critiques (form_submit, purchase) dans la section "events"
-5. NE SUPPRIME JAMAIS d'events existants, ne modifie que "enabled" et les paramètres si nécessaire
-6. Respecte l'indentation et les commentaires du fichier original
-
-FORMAT DE SORTIE: Tu dois répondre UNIQUEMENT avec du YAML valide complet, sans markdown, sans explication.`;
+// ============================================================
+// PROMPTS POUR LE PIPELINE 3 ÉTAPES
+// ============================================================
 
 /**
- * Génère le prompt utilisateur pour l'ÉTAPE 1 : Analyse HTML
- * @param {Object} htmlAnalysis - Données de l'analyse HTML
- * @param {Object} options - Options (type de site, etc.)
- * @returns {string} Prompt formaté
+ * ÉTAPE 1: Prompt d'analyse métier
+ * Input: Éléments HTML scannés
+ * Output: Events GA4 recommandés avec importance
  */
 function buildAnalysisPrompt(htmlAnalysis, options = {}) {
   const siteType = options.siteType || 'lead-gen';
+  const projectName = options.projectName || 'Mon Site';
+  const domain = options.domain || '(non spécifié)';
 
-  return `ÉTAPE 1 - ANALYSE DES ÉLÉMENTS À TRACKER
+  return `Tu es un expert Google Analytics 4 et tracking web.
+Analyse ces éléments interactifs détectés et détermine quels événements GA4 tracker.
 
-Type de site: ${siteType}
-Nom du projet: ${options.projectName || 'Mon Site'}
-Domaine: ${options.domain || '(non spécifié)'}
+## CONTEXTE DU SITE
+- Type: ${siteType}
+- Nom: ${projectName}
+- Domaine: ${domain}
 
-ÉLÉMENTS HTML DÉTECTÉS:
-${JSON.stringify(htmlAnalysis.elements, null, 2)}
+## ÉLÉMENTS DÉTECTÉS
+${JSON.stringify(htmlAnalysis, null, 2)}
 
-TÂCHE:
-Analyse ces éléments et liste les events GA4 à implémenter.
-Pour chaque catégorie d'éléments, indique:
-1. L'event GA4 recommandé (nom)
-2. Si c'est un event simple ou consolidé
-3. Les paramètres pertinents à capturer
-4. Si c'est une conversion ou non
+## TÂCHE
+Analyse TOUS les éléments et pour chacun détermine:
+1. S'il mérite d'être tracké (importance: high/medium/low)
+2. Le nom d'événement GA4 approprié (snake_case, max 40 caractères)
+3. La catégorie (conversion, engagement, navigation, contact)
+4. Les paramètres pertinents à capturer
 
-Réponds en JSON structuré comme ceci:
+## CRITÈRES DE PRIORISATION
+- HIGH: Conversions directes (formulaires contact/devis, CTA principaux, achats, liens tel/mailto)
+- MEDIUM: Engagement fort (vidéo, FAQ, téléchargements PDF, specs produit)
+- LOW: Navigation générique, liens sociaux, scroll anchors
+
+## IMPORTANT
+- Inclus TOUS les éléments high et medium dans ta réponse
+- Pour les éléments low, inclus seulement les plus pertinents (max 10)
+- Pour les liens tel: et mailto:, utilise les events "phone_click" et "email_click"
+- Pour les PDF, utilise "file_download"
+
+## FORMAT DE RÉPONSE (JSON strict, sans markdown)
 {
-  "recommendations": [
+  "analysis_summary": {
+    "total_elements_analyzed": 0,
+    "recommended_events": 0,
+    "high_priority": 0,
+    "medium_priority": 0,
+    "low_priority": 0
+  },
+  "events": [
     {
-      "category": "cta",
+      "element_id": "cta-hero",
+      "importance": "high",
       "event_name": "cta_click",
-      "consolidated": true,
-      "conversion": true,
-      "params": ["cta_location", "cta_type", "button_text"],
-      "reason": "Plusieurs CTAs détectés dans navbar, hero, footer"
+      "category": "conversion",
+      "reason": "Bouton CTA principal dans le hero",
+      "html_context": "hero",
+      "parameters": [
+        {"name": "cta_location", "source": "context", "value": "hero"},
+        {"name": "button_text", "source": "click_text"}
+      ],
+      "is_conversion": true
+    },
+    {
+      "element_id": "phone-link",
+      "importance": "high",
+      "event_name": "phone_click",
+      "category": "contact",
+      "reason": "Lien téléphone - intention de contact directe",
+      "html_context": "header",
+      "parameters": [],
+      "is_conversion": true
     }
   ]
-}`;
+}
+
+IMPORTANT: Réponds UNIQUEMENT avec du JSON valide, sans backticks ni markdown.`;
 }
 
 /**
- * Génère le prompt utilisateur pour l'ÉTAPE 2 : Édition YAML
- * @param {Object} recommendations - Recommandations de l'étape 1
- * @param {string} templateYaml - Template YAML existant
- * @param {Object} options - Options
- * @returns {string} Prompt formaté
+ * ÉTAPE 2: Prompt de consolidation/grouping
+ * Input: Events de l'étape 1
+ * Output: Events groupés + events standalone
  */
-function buildEditPrompt(recommendations, templateYaml, options = {}) {
-  return `ÉTAPE 2 - ÉDITION DU YAML EXISTANT
+function buildGroupingPrompt(analysisResult, options = {}) {
+  return `Tu reçois une liste d'événements GA4 recommandés.
+Identifie les opportunités de CONSOLIDATION pour réduire le nombre de tags GTM.
 
-Tu as analysé le site et voici tes recommandations:
-${JSON.stringify(recommendations, null, 2)}
+## ÉVÉNEMENTS À ANALYSER
+${JSON.stringify(analysisResult.events, null, 2)}
 
-YAML TEMPLATE À MODIFIER:
-Tu dois éditer CE fichier YAML en:
-1. Remplissant la section "project" avec: name="${options.projectName || ''}", domain="${options.domain || ''}"
-2. Mettant "enabled: true" sur les events pertinents de la section "events"
-3. Mettant "enabled: true" sur les events consolidés pertinents de la section "consolidated_events"
-4. Ajoutant de NOUVEAUX events si nécessaire (en suivant EXACTEMENT le même format)
-5. NE PAS supprimer les events existants, juste modifier "enabled"
+## RÈGLES DE CONSOLIDATION
 
-FICHIER YAML À ÉDITER:
-${templateYaml}
+### À CONSOLIDER (1 tag GTM pour plusieurs actions similaires):
+- Plusieurs CTA dans différents contextes → "cta_click" + param "cta_location"
+- Plusieurs interactions FAQ → "faq_interaction" + param "faq_action"
+- Plusieurs interactions vidéo → "video_interaction" + param "video_action"
+- Plusieurs téléchargements de fichiers → "file_download" + param "file_type"
+- Navigation menu → peut être ignorée ou consolidée en "navigation_click"
 
-RÈGLES:
-- Conserve TOUS les commentaires existants
-- Conserve EXACTEMENT la même indentation (2 espaces)
-- Ne modifie PAS la structure des events existants sauf "enabled"
-- Si tu ajoutes un nouvel event, copie la structure d'un event existant similaire
-- Réponds UNIQUEMENT avec le YAML complet modifié, sans explication`;
+### À GARDER SÉPARÉS (events standalone):
+- Formulaires (generate_lead, form_submit) - conversions critiques
+- Téléphone (phone_click) - conversion contact
+- Email (email_click) - conversion contact
+- Achat (purchase) - conversion e-commerce
+
+### EVENTS À INCLURE DÉSACTIVÉS (enabled: false):
+- Tous les events "low" priority dans les standalone avec enabled: false
+
+## FORMAT DE RÉPONSE (JSON strict)
+{
+  "grouping_summary": {
+    "original_events": 0,
+    "consolidated_groups": 0,
+    "standalone_events": 0,
+    "disabled_events": 0,
+    "reduction_percentage": 0
+  },
+  "event_groups": [
+    {
+      "group_id": "cta_clicks",
+      "strategy": "consolidated_by_location",
+      "event_name": "cta_click",
+      "description": "Tous les clics CTA consolidés avec paramètre location",
+      "source_events": ["cta-hero", "cta-navbar", "cta-footer"],
+      "source_contexts": ["hero", "navbar", "footer"],
+      "dynamic_param": "cta_location",
+      "is_conversion": true,
+      "category": "Lead Generation",
+      "parameters": [
+        {"name": "cta_location", "type": "dynamic", "values": ["hero", "navbar", "footer"]},
+        {"name": "button_text", "type": "gtm_builtin", "variable": "{{Click Text}}"}
+      ]
+    }
+  ],
+  "standalone_events": [
+    {
+      "element_id": "contact-form",
+      "event_name": "generate_lead",
+      "category": "Lead Generation",
+      "reason": "Formulaire de contact - conversion critique",
+      "is_conversion": true,
+      "enabled": true,
+      "importance": "high",
+      "parameters": [
+        {"name": "form_name", "value": "contact"}
+      ]
+    },
+    {
+      "element_id": "social-facebook",
+      "event_name": "social_click",
+      "category": "Engagement",
+      "reason": "Clic réseau social - faible priorité",
+      "is_conversion": false,
+      "enabled": false,
+      "importance": "low",
+      "parameters": []
+    }
+  ]
 }
+
+IMPORTANT:
+- Inclus TOUS les events dans ta réponse (soit dans event_groups, soit dans standalone_events)
+- Les events "low" importance doivent avoir enabled: false
+- Réponds UNIQUEMENT avec du JSON valide, sans backticks ni markdown.`;
+}
+
+/**
+ * ÉTAPE 3: Génération YAML programmatique (pas d'IA)
+ * Construit le YAML directement depuis les données JSON
+ */
+function buildYAMLConfig(analysisResult, groupingResult, selectorResults, options = {}) {
+  const config = {
+    project: {
+      name: options.projectName || '',
+      domain: options.domain || '',
+      ga4_measurement_id: '',
+      gtm_container_id: '',
+      updated: new Date().toISOString().split('T')[0],
+      generated_by: 'google-setup autoedit'
+    },
+    events: [],
+    consolidated_events: [],
+    variables: {
+      datalayer: []
+    }
+  };
+
+  const variablesSet = new Set();
+
+  // Générer les consolidated_events depuis event_groups
+  for (const group of (groupingResult.event_groups || [])) {
+    const consolidatedEvent = {
+      id: group.group_id,
+      name: group.description || `Event consolidé: ${group.event_name}`,
+      category: group.category || 'Engagement',
+      objective: group.description,
+      enabled: true,
+      consolidated: true,
+
+      // Actions regroupées
+      actions: (group.source_contexts || group.source_events || []).map(ctx => ({
+        id: typeof ctx === 'string' ? ctx : ctx.id,
+        description: typeof ctx === 'string' ? `Action: ${ctx}` : ctx.description
+      })),
+
+      datalayer: {
+        event_name: group.event_name,
+        params: (group.parameters || []).map(p => ({
+          name: p.name,
+          type: p.type === 'dynamic' ? 'string' : 'string',
+          description: p.description || `Paramètre ${p.name}`,
+          values: p.values || [],
+          required: p.type === 'dynamic'
+        }))
+      },
+
+      gtm: {
+        trigger: {
+          type: 'Événement personnalisé',
+          name: `EV - ${group.event_name}`,
+          condition: `event equals ${group.event_name}`
+        },
+        tag: {
+          name: `GA4 - EV - ${formatTagName(group.event_name)}`,
+          type: 'Événement GA4'
+        }
+      },
+
+      ga4: {
+        event_name: group.event_name,
+        conversion: group.is_conversion || false,
+        parameters: (group.parameters || []).map(p => ({
+          name: p.name,
+          variable: p.variable || `{{DLV - ${p.name}}}`
+        }))
+      }
+    };
+
+    config.consolidated_events.push(consolidatedEvent);
+
+    // Ajouter les variables
+    for (const param of (group.parameters || [])) {
+      if (!variablesSet.has(param.name) && param.type !== 'gtm_builtin') {
+        variablesSet.add(param.name);
+        config.variables.datalayer.push({
+          name: `DLV - ${param.name}`,
+          datalayer_name: param.name,
+          type: 'Variable de couche de données'
+        });
+      }
+    }
+  }
+
+  // Générer les events standalone
+  for (const event of (groupingResult.standalone_events || [])) {
+    // Trouver le sélecteur pour cet element
+    const selector = selectorResults[event.element_id];
+    const selectorInfo = selector?.recommended || { selector: '', confidence: 'low' };
+
+    const standaloneEvent = {
+      id: event.element_id || event.event_name,
+      name: formatEventName(event.event_name),
+      category: event.category || 'Engagement',
+      objective: event.reason || '',
+      enabled: event.enabled !== false,
+
+      trigger: {
+        user_action: event.reason || `Événement ${event.event_name}`,
+        html_selector: selectorInfo.selector || ''
+      },
+
+      datalayer: {
+        event_name: event.event_name,
+        params: (event.parameters || []).map(p => ({
+          name: p.name,
+          type: 'string',
+          value: p.value || ''
+        }))
+      },
+
+      gtm: {
+        trigger: {
+          type: 'Événement personnalisé',
+          name: `EV - ${event.event_name}`,
+          condition: `event equals ${event.event_name}`
+        },
+        tag: {
+          name: `GA4 - EV - ${formatTagName(event.event_name)}`,
+          type: 'Événement GA4'
+        }
+      },
+
+      ga4: {
+        event_name: event.event_name,
+        conversion: event.is_conversion || false,
+        parameters: (event.parameters || []).map(p => ({
+          name: p.name,
+          value: p.value || `{{DLV - ${p.name}}}`
+        }))
+      }
+    };
+
+    // Ajouter le selector_confidence si présent
+    if (selectorInfo.confidence) {
+      standaloneEvent.selector_confidence = selectorInfo.confidence;
+    }
+
+    config.events.push(standaloneEvent);
+
+    // Ajouter les variables
+    for (const param of (event.parameters || [])) {
+      if (!variablesSet.has(param.name)) {
+        variablesSet.add(param.name);
+        config.variables.datalayer.push({
+          name: `DLV - ${param.name}`,
+          datalayer_name: param.name,
+          type: 'Variable de couche de données'
+        });
+      }
+    }
+  }
+
+  return config;
+}
+
+/**
+ * Formate un nom d'event en nom lisible
+ */
+function formatEventName(eventName) {
+  const names = {
+    'cta_click': 'CTA - Clic',
+    'generate_lead': 'Formulaire - Génération de lead',
+    'form_submit': 'Formulaire - Soumission',
+    'phone_click': 'Contact - Téléphone',
+    'email_click': 'Contact - Email',
+    'whatsapp_click': 'Contact - WhatsApp',
+    'file_download': 'Téléchargement - Fichier',
+    'video_interaction': 'Vidéo - Interaction',
+    'faq_interaction': 'FAQ - Interaction',
+    'scroll_depth': 'Scroll - Profondeur',
+    'social_click': 'Réseaux sociaux - Clic'
+  };
+  return names[eventName] || eventName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+/**
+ * Formate un nom d'event pour le nom de tag GTM
+ */
+function formatTagName(eventName) {
+  return eventName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
+// ============================================================
+// FONCTIONS D'APPEL AUX APIs
+// ============================================================
 
 /**
  * Appelle l'API Google Gemini
@@ -168,7 +444,7 @@ async function callGemini(modelConfig, systemPrompt, userPrompt) {
         }
       ],
       generationConfig: {
-        temperature: 0.2,
+        temperature: 0.1, // Plus déterministe pour la génération de code
         maxOutputTokens: modelConfig.maxTokens
       }
     })
@@ -236,7 +512,7 @@ async function callOpenAI(modelConfig, systemPrompt, userPrompt) {
     body: JSON.stringify({
       model: modelConfig.model,
       max_tokens: modelConfig.maxTokens,
-      temperature: 0.2,
+      temperature: 0.1,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -255,10 +531,6 @@ async function callOpenAI(modelConfig, systemPrompt, userPrompt) {
 
 /**
  * Appelle l'IA pour un provider donné
- * @param {Object} modelConfig - Configuration du modèle
- * @param {string} systemPrompt - Prompt système
- * @param {string} userPrompt - Prompt utilisateur
- * @returns {string} Réponse de l'IA
  */
 async function callModel(modelConfig, systemPrompt, userPrompt) {
   switch (modelConfig.provider) {
@@ -276,35 +548,57 @@ async function callModel(modelConfig, systemPrompt, userPrompt) {
 /**
  * Nettoie la réponse IA (enlève les backticks markdown)
  */
-function cleanResponse(response, type = 'yaml') {
+function cleanResponse(response, type = 'json') {
   let content = response.trim();
 
   // Enlever les blocs de code markdown
-  const codeBlockRegex = new RegExp(`^\`\`\`${type}?\\n?`, 'i');
-  content = content.replace(codeBlockRegex, '');
-  content = content.replace(/\n?```$/g, '');
+  const patterns = [
+    new RegExp(`^\`\`\`${type}?\\s*\\n?`, 'i'),
+    new RegExp(`^\`\`\`\\s*\\n?`, 'i'),
+    /\n?\`\`\`$/g
+  ];
 
-  // Enlever les backticks restants
-  if (content.startsWith('```')) {
-    content = content.slice(3);
-  }
-  if (content.endsWith('```')) {
-    content = content.slice(0, -3);
+  for (const pattern of patterns) {
+    content = content.replace(pattern, '');
   }
 
   return content.trim();
 }
 
 /**
- * Appelle l'IA en 2 étapes :
- * 1. Analyse HTML → recommandations d'events
- * 2. Édition du YAML template avec les recommandations
- *
- * @param {Object} htmlAnalysis - Analyse HTML préparée pour l'IA
- * @param {Object} options - Options (model, siteType, templateYaml, etc.)
- * @returns {Object} Résultat avec le YAML édité
+ * Parse JSON avec fallback
  */
-export async function callAI(htmlAnalysis, options = {}) {
+function safeParseJSON(text) {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // Essayer d'extraire le JSON du texte
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error(`JSON invalide: ${text.slice(0, 200)}`);
+  }
+}
+
+// ============================================================
+// FONCTION PRINCIPALE DU PIPELINE
+// ============================================================
+
+/**
+ * Exécute le pipeline IA en 2 étapes + génération programmatique
+ *
+ * Pipeline:
+ *   1. IA: Analyse métier → Events GA4 recommandés
+ *   2. IA: Grouping → Consolidation des events similaires
+ *   3. Code: Génération YAML programmatique (pas d'IA)
+ *
+ * @param {Object} htmlAnalysis - Données préparées par prepareForAI()
+ * @param {Object} selectorResults - Résultats de findSelectorsForElements()
+ * @param {Object} options - Options de configuration
+ * @returns {Object} Résultat avec config structurée et données intermédiaires
+ */
+export async function runAIPipeline(htmlAnalysis, selectorResults, options = {}) {
   const modelId = options.model || 'gemini-flash';
   const modelConfig = AI_MODELS[modelId];
 
@@ -312,69 +606,122 @@ export async function callAI(htmlAnalysis, options = {}) {
     throw new Error(`Modèle inconnu: ${modelId}. Disponibles: ${Object.keys(AI_MODELS).join(', ')}`);
   }
 
-  // Vérifier que la clé API existe
   const apiKey = process.env[modelConfig.envKey];
   if (!apiKey) {
     throw new Error(`Clé API manquante. Ajoutez ${modelConfig.envKey} dans votre fichier .env`);
   }
 
-  // Vérifier qu'on a un template YAML
-  if (!options.templateYaml) {
-    throw new Error('templateYaml est requis pour éditer le fichier YAML');
-  }
+  const debug = {
+    steps: [],
+    model: modelConfig.name,
+    modelId,
+    timestamp: new Date().toISOString()
+  };
 
   // ==========================================
-  // ÉTAPE 1 : Analyse HTML → Recommandations
+  // ÉTAPE 1: Analyse métier (IA)
   // ==========================================
-  const analysisPrompt = buildAnalysisPrompt(htmlAnalysis, options);
-  const analysisSystemPrompt = `Tu es un expert Google Tag Manager et GA4.
-Analyse les éléments HTML détectés et recommande les events à tracker.
-Réponds UNIQUEMENT en JSON valide, sans markdown.`;
+  const step1Prompt = buildAnalysisPrompt(htmlAnalysis, options);
+  const step1System = 'Tu es un expert GA4 et GTM. Analyse les éléments HTML et recommande les events à tracker. Réponds en JSON strict.';
 
-  let analysisResponse = await callModel(modelConfig, analysisSystemPrompt, analysisPrompt);
-  analysisResponse = cleanResponse(analysisResponse, 'json');
+  let step1Response = await callModel(modelConfig, step1System, step1Prompt);
+  step1Response = cleanResponse(step1Response, 'json');
 
-  // Parser les recommandations
-  let recommendations;
+  let analysisResult;
   try {
-    recommendations = JSON.parse(analysisResponse);
+    analysisResult = safeParseJSON(step1Response);
   } catch (e) {
-    // Si le JSON est invalide, essayer d'extraire la partie JSON
-    const jsonMatch = analysisResponse.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      recommendations = JSON.parse(jsonMatch[0]);
-    } else {
-      throw new Error(`Réponse JSON invalide de l'IA: ${analysisResponse.slice(0, 200)}`);
-    }
+    throw new Error(`Étape 1 - Analyse: Réponse JSON invalide - ${e.message}`);
   }
 
-  // ==========================================
-  // ÉTAPE 2 : Édition du YAML avec les recommandations
-  // ==========================================
-  const editPrompt = buildEditPrompt(recommendations, options.templateYaml, options);
+  debug.steps.push({
+    step: 1,
+    name: 'analysis',
+    prompt: step1Prompt,
+    response: step1Response,
+    result: analysisResult
+  });
 
-  let yamlResponse = await callModel(modelConfig, SYSTEM_PROMPT, editPrompt);
-  yamlResponse = cleanResponse(yamlResponse, 'yaml');
+  // ==========================================
+  // ÉTAPE 2: Grouping / Consolidation (IA)
+  // ==========================================
+  const step2Prompt = buildGroupingPrompt(analysisResult, options);
+  const step2System = 'Tu es un expert GTM. Consolide les events similaires pour optimiser le nombre de tags. Réponds en JSON strict.';
+
+  let step2Response = await callModel(modelConfig, step2System, step2Prompt);
+  step2Response = cleanResponse(step2Response, 'json');
+
+  let groupingResult;
+  try {
+    groupingResult = safeParseJSON(step2Response);
+  } catch (e) {
+    throw new Error(`Étape 2 - Grouping: Réponse JSON invalide - ${e.message}`);
+  }
+
+  debug.steps.push({
+    step: 2,
+    name: 'grouping',
+    prompt: step2Prompt,
+    response: step2Response,
+    result: groupingResult
+  });
+
+  // ==========================================
+  // ÉTAPE 3: Génération YAML (programmatique)
+  // ==========================================
+  const yamlConfig = buildYAMLConfig(analysisResult, groupingResult, selectorResults, options);
+
+  debug.steps.push({
+    step: 3,
+    name: 'yaml_generation',
+    prompt: '(Génération programmatique - pas de prompt IA)',
+    response: JSON.stringify(yamlConfig, null, 2),
+    result: yamlConfig
+  });
+
+  // Calculer les stats
+  const enabledStandalone = (groupingResult.standalone_events || []).filter(e => e.enabled !== false).length;
+  const disabledStandalone = (groupingResult.standalone_events || []).filter(e => e.enabled === false).length;
 
   return {
     success: true,
     model: modelConfig.name,
     modelId,
-    recommendations: recommendations.recommendations || [],
-    yaml: yamlResponse,
-    // Debug: réponses brutes pour diagnostic
-    debug: {
-      step1_prompt: analysisPrompt,
-      step1_response: analysisResponse,
-      step2_prompt: editPrompt,
-      step2_response: yamlResponse
-    }
+
+    // Résultats intermédiaires
+    analysis: analysisResult,
+    grouping: groupingResult,
+
+    // Résultat final (objet, pas YAML string)
+    config: yamlConfig,
+
+    // Stats
+    stats: {
+      eventsAnalyzed: analysisResult.analysis_summary?.total_elements_analyzed || 0,
+      eventsRecommended: analysisResult.analysis_summary?.recommended_events || analysisResult.events?.length || 0,
+      consolidatedGroups: groupingResult.event_groups?.length || 0,
+      standaloneEvents: enabledStandalone,
+      disabledEvents: disabledStandalone,
+      reductionPercent: groupingResult.grouping_summary?.reduction_percentage || 0
+    },
+
+    // Debug (pour --debug)
+    debug
   };
 }
 
 /**
- * Liste les modèles disponibles et leur statut (clé API configurée ou non)
- * @returns {Array} Liste des modèles avec leur statut
+ * Fonction legacy pour compatibilité avec l'ancien code
+ * @deprecated Utiliser runAIPipeline à la place
+ */
+export async function callAI(htmlAnalysis, options = {}) {
+  // Créer des sélecteurs factices pour compatibilité
+  const fakeSelectorResults = {};
+  return await runAIPipeline(htmlAnalysis, fakeSelectorResults, options);
+}
+
+/**
+ * Liste les modèles disponibles et leur statut
  */
 export function listAvailableModels() {
   return Object.entries(AI_MODELS).map(([id, config]) => ({
@@ -388,8 +735,7 @@ export function listAvailableModels() {
 }
 
 /**
- * Retourne le premier modèle disponible (avec clé API configurée)
- * @returns {string|null} ID du modèle ou null
+ * Retourne le premier modèle disponible
  */
 export function getDefaultModel() {
   for (const [id, config] of Object.entries(AI_MODELS)) {
@@ -398,4 +744,11 @@ export function getDefaultModel() {
     }
   }
   return null;
+}
+
+/**
+ * Récupère la config d'un modèle
+ */
+export function getModelConfig(modelId) {
+  return AI_MODELS[modelId] || null;
 }

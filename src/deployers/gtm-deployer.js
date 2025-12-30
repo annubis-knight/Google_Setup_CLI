@@ -6,9 +6,111 @@ import { dirname, join } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Crée un conteneur GTM et configure les balises/triggers/variables
+ * Convertit une config YAML en format GTM API
  */
-export async function deployGTM(domain, projectName, accountId, ga4MeasurementId, templateName = 'lead-gen') {
+function convertYamlToGtmFormat(gtmConfig, ga4MeasurementId) {
+  const result = {
+    variables: [],
+    triggers: [],
+    tags: []
+  };
+
+  // Convertir les variables
+  for (const v of gtmConfig.variables || []) {
+    if (v.type === 'constant') {
+      result.variables.push({
+        name: v.name,
+        type: 'c',
+        parameter: [
+          { type: 'TEMPLATE', key: 'value', value: v.value === '{{GA4_MEASUREMENT_ID}}' ? ga4MeasurementId : v.value }
+        ]
+      });
+    } else if (v.type === 'data_layer') {
+      result.variables.push({
+        name: v.name,
+        type: 'v',
+        parameter: [
+          { type: 'INTEGER', key: 'dataLayerVersion', value: '2' },
+          { type: 'TEMPLATE', key: 'name', value: v.data_layer_name }
+        ]
+      });
+    }
+  }
+
+  // Convertir les triggers
+  for (const t of gtmConfig.triggers || []) {
+    if (t._category) continue; // Ignorer les séparateurs
+
+    if (t.type === 'pageview') {
+      result.triggers.push({
+        name: t.name,
+        type: 'pageview'
+      });
+    } else if (t.type === 'custom_event') {
+      result.triggers.push({
+        name: t.name,
+        type: 'customEvent',
+        customEventFilter: [
+          {
+            type: 'equals',
+            parameter: [
+              { type: 'template', key: 'arg0', value: '{{_event}}' },
+              { type: 'template', key: 'arg1', value: t.event_name }
+            ]
+          }
+        ]
+      });
+    }
+  }
+
+  // Convertir les tags
+  for (const tag of gtmConfig.tags || []) {
+    if (tag.type === 'ga4_configuration') {
+      result.tags.push({
+        name: tag.name,
+        type: 'gaawc',
+        parameter: [
+          { type: 'TEMPLATE', key: 'measurementId', value: ga4MeasurementId }
+        ],
+        firingTriggerName: tag.triggers?.[0] || 'All Pages'
+      });
+    } else if (tag.type === 'ga4_event') {
+      // Construire les event parameters
+      const eventParams = [];
+      for (const param of tag.event_parameters || []) {
+        eventParams.push({
+          map: [
+            { type: 'TEMPLATE', key: 'name', value: param.name },
+            { type: 'TEMPLATE', key: 'value', value: param.value }
+          ]
+        });
+      }
+
+      result.tags.push({
+        name: tag.name,
+        type: 'gaawe',
+        parameter: [
+          { type: 'TEMPLATE', key: 'eventName', value: '{{Event}}' },
+          { type: 'TAG_REFERENCE', key: 'measurementId', value: tag.configuration_tag || 'GA4 - Config' },
+          { type: 'LIST', key: 'eventParameters', list: eventParams }
+        ],
+        firingTriggerNames: tag.triggers || []
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Crée un conteneur GTM et configure les balises/triggers/variables
+ * @param {string} domain - Domaine cible
+ * @param {string} projectName - Nom du projet
+ * @param {string} accountId - ID du compte GTM
+ * @param {string} ga4MeasurementId - ID GA4
+ * @param {Object|string} gtmConfigOrTemplate - Config YAML parsée ou nom de template legacy
+ */
+export async function deployGTM(domain, projectName, accountId, ga4MeasurementId, gtmConfigOrTemplate = 'lead-gen') {
   const tagmanager = google.tagmanager('v2');
 
   console.log('🏷️  Création conteneur GTM...');
@@ -31,14 +133,21 @@ export async function deployGTM(domain, projectName, accountId, ga4MeasurementId
   });
   const workspace = workspacesRes.data.workspace[0];
 
-  // 3. Charger le template
-  const templatePath = join(__dirname, '../templates', `gtm-${templateName}.json`);
+  // 3. Déterminer la source de config
   let template;
-  try {
-    template = JSON.parse(readFileSync(templatePath, 'utf8'));
-  } catch (e) {
-    console.log(`   ⚠️  Template ${templateName} non trouvé, utilisation du template par défaut`);
-    template = getDefaultTemplate();
+  if (typeof gtmConfigOrTemplate === 'object' && gtmConfigOrTemplate !== null) {
+    // Nouvelle méthode : config YAML
+    console.log('   ⏳ Conversion config YAML → GTM API...');
+    template = convertYamlToGtmFormat(gtmConfigOrTemplate, ga4MeasurementId);
+  } else {
+    // Legacy : template JSON
+    const templatePath = join(__dirname, '../templates', `gtm-${gtmConfigOrTemplate}.json`);
+    try {
+      template = JSON.parse(readFileSync(templatePath, 'utf8'));
+    } catch (e) {
+      console.log(`   ⚠️  Template ${gtmConfigOrTemplate} non trouvé, utilisation du template par défaut`);
+      template = getDefaultTemplate();
+    }
   }
 
   console.log('   ⏳ Création des éléments GTM...');
@@ -127,10 +236,18 @@ async function createGTMElements(tagmanager, workspacePath, template, variables)
   // Créer les balises
   for (const tag of processed.tags || []) {
     try {
-      // Remplacer la référence au trigger par son ID
+      // Remplacer la référence au trigger par son ID (format legacy)
       if (tag.firingTriggerName && triggerIdMap[tag.firingTriggerName]) {
         tag.firingTriggerId = [triggerIdMap[tag.firingTriggerName]];
         delete tag.firingTriggerName;
+      }
+
+      // Remplacer les références aux triggers par leurs IDs (nouveau format avec tableau)
+      if (tag.firingTriggerNames && Array.isArray(tag.firingTriggerNames)) {
+        tag.firingTriggerId = tag.firingTriggerNames
+          .map(name => triggerIdMap[name])
+          .filter(Boolean);
+        delete tag.firingTriggerNames;
       }
 
       await tagmanager.accounts.containers.workspaces.tags.create({

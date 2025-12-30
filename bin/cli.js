@@ -8,6 +8,9 @@ import { runStatus } from '../src/commands/status.js';
 import { runContinue } from '../src/commands/continue.js';
 import { runSync } from '../src/commands/sync.js';
 import { runInitTracking } from '../src/commands/init-tracking.js';
+import { runEventSetup } from '../src/commands/event-setup.js';
+import { runGtmConfigSetup } from '../src/commands/gtm-config-setup.js';
+import { runHtmlLayer } from '../src/commands/html-layer.js';
 import { runGenerateTracking } from '../src/commands/generate-tracking.js';
 import { runClean } from '../src/commands/clean.js';
 import { runEditConfigAuto } from '../src/commands/editconfig-auto.js';
@@ -34,10 +37,10 @@ program
 
 program
   .command('deploy')
-  .description('Déployer la configuration sur un domaine')
+  .description('[Étape 4/5] Déployer la configuration GTM (depuis gtm-config.yaml)')
   .option('-d, --domain <domain>', 'Domaine cible')
   .option('-n, --name <name>', 'Nom du projet')
-  .option('-t, --template <template>', 'Template GTM (minimal|lead-gen|ecommerce)', 'lead-gen')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('--auto', 'Mode automatique sans confirmation')
   .action(runDeploy);
 
@@ -51,7 +54,7 @@ program
   .command('continue')
   .description('Continuer le déploiement automatiquement')
   .option('-d, --domain <domain>', 'Domaine cible')
-  .option('-t, --template <template>', 'Template GTM (minimal|lead-gen|ecommerce)', 'lead-gen')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('--auto', 'Mode automatique sans confirmation')
   .action(runContinue);
 
@@ -63,13 +66,39 @@ program
   .option('--auto', 'Mode automatique sans confirmation')
   .action(runSync);
 
+// ============================================
+// WORKFLOW TRACKING (Étapes 1-5)
+// ============================================
+
 program
   .command('init-tracking')
-  .description('Générer les fichiers de plan de taggage (YAML + Markdown)')
+  .description('[Étape 1/5] Initialiser le dossier tracking/ avec le template complet')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
-  .option('-o, --output <dir>', 'Dossier de sortie (défaut: tracking)')
   .option('--force', 'Écraser les fichiers existants')
   .action(runInitTracking);
+
+program
+  .command('event-setup')
+  .description('[Étape 2/5] Sélectionner les events à tracker')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .action(runEventSetup);
+
+program
+  .command('gtm-config-setup')
+  .description('[Étape 3/5] Générer gtm-config.yaml depuis tracking-events.yaml')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .action(runGtmConfigSetup);
+
+program
+  .command('html-layer')
+  .description('[Étape 5/5] Ajouter les attributs data-track au HTML')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .option('-s, --source <path>', 'Chemin des fichiers HTML (défaut: même que path)')
+  .action(runHtmlLayer);
+
+// ============================================
+// COMMANDES LEGACY (compatibilité)
+// ============================================
 
 program
   .command('generate-tracking')
@@ -103,6 +132,7 @@ program
   .description('Analyser le HTML avec IA et générer le tracking plan automatiquement')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('-s, --source <path>', 'Chemin des fichiers HTML à scanner (défaut: même que --path)')
+  .option('--step <number>', 'Exécuter une étape spécifique (1-8)')
   .option('--ai <model>', 'Modèle IA (gemini-flash, claude-haiku, gpt-4o-mini)')
   .option('-n, --name <name>', 'Nom du projet')
   .option('-d, --domain <domain>', 'Domaine du site')
@@ -112,7 +142,7 @@ program
   .option('--auto', 'Mode automatique sans confirmation')
   .option('--dry-run', 'Prévisualiser sans sauvegarder')
   .option('--force', 'Sauvegarder sans confirmation')
-  .option('--debug', 'Sauvegarder les réponses IA brutes dans tracking/debug/')
+  .option('--debug', 'Sauvegarder les données de debug dans tracking/debug/')
   .action(runAutoEdit);
 
 // Mode interactif par défaut si aucun argument

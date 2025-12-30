@@ -7,8 +7,11 @@ import { runStatus } from './status.js';
 import { runContinue } from './continue.js';
 import { runSync } from './sync.js';
 import { handleInitTrackingInteractive } from './init-tracking.js';
-import { handleGenerateTrackingInteractive } from './generate-tracking.js';
+import { handleEventSetupInteractive } from './event-setup.js';
+import { handleGtmConfigSetupInteractive } from './gtm-config-setup.js';
+import { handleHtmlLayerInteractive } from './html-layer.js';
 import { handleCleanInteractive } from './clean.js';
+import { runAutoEdit } from './autoedit.js';
 
 export async function interactiveMode() {
   console.clear();
@@ -23,14 +26,20 @@ export async function interactiveMode() {
       name: 'action',
       message: 'Que voulez-vous faire ?',
       choices: [
-        { name: '📋 Voir la progression d\'un site (status)', value: 'status' },
+        new inquirer.Separator(chalk.cyan('─── WORKFLOW TRACKING (5 étapes) ───')),
+        { name: '1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)', value: 'init-tracking' },
+        { name: '2️⃣  [Étape 2] Sélectionner les events (event-setup)', value: 'event-setup' },
+        { name: '3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)', value: 'gtm-config-setup' },
+        { name: '4️⃣  [Étape 4] Déployer dans GTM (deploy)', value: 'deploy' },
+        { name: '5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)', value: 'html-layer' },
+        new inquirer.Separator(chalk.cyan('─── AUTRES COMMANDES ───')),
+        { name: '🤖 AutoEdit - Générer tracking avec IA', value: 'autoedit' },
+        { name: '📋 Voir la progression KPI (status)', value: 'status' },
         { name: '▶️  Continuer le déploiement (continue)', value: 'continue' },
-        { name: '🔄 Synchroniser projet local → GTM (sync)', value: 'sync' },
-        { name: '📄 Générer plan de taggage (init-tracking)', value: 'init-tracking' },
-        { name: '⚡ Générer gtm-tracking.js (generate-tracking)', value: 'generate-tracking' },
+        { name: '🔄 Synchroniser projet → GTM (sync)', value: 'sync' },
         { name: '🧹 Nettoyer GTM (clean)', value: 'clean' },
-        { name: '🔍 Auditer un ou plusieurs domaines', value: 'audit' },
-        { name: '🚀 Déployer from scratch', value: 'deploy' },
+        { name: '🔍 Auditer un domaine', value: 'audit' },
+        new inquirer.Separator(''),
         { name: '❌ Quitter', value: 'exit' }
       ]
     }]);
@@ -40,36 +49,40 @@ export async function interactiveMode() {
       process.exit(0);
     }
 
-    if (action === 'status') {
-      await handleStatusInteractive();
-    }
-
-    if (action === 'continue') {
-      await handleContinueInteractive();
-    }
-
-    if (action === 'sync') {
-      await handleSyncInteractive();
-    }
-
-    if (action === 'init-tracking') {
-      await handleInitTrackingInteractive();
-    }
-
-    if (action === 'generate-tracking') {
-      await handleGenerateTrackingInteractive();
-    }
-
-    if (action === 'clean') {
-      await handleCleanInteractive();
-    }
-
-    if (action === 'audit') {
-      await handleAuditInteractive();
-    }
-
-    if (action === 'deploy') {
-      await handleDeployInteractive();
+    switch (action) {
+      case 'init-tracking':
+        await handleInitTrackingInteractive();
+        break;
+      case 'event-setup':
+        await handleEventSetupInteractive();
+        break;
+      case 'gtm-config-setup':
+        await handleGtmConfigSetupInteractive();
+        break;
+      case 'deploy':
+        await handleDeployInteractive();
+        break;
+      case 'html-layer':
+        await handleHtmlLayerInteractive();
+        break;
+      case 'autoedit':
+        await handleAutoEditInteractive();
+        break;
+      case 'status':
+        await handleStatusInteractive();
+        break;
+      case 'continue':
+        await handleContinueInteractive();
+        break;
+      case 'sync':
+        await handleSyncInteractive();
+        break;
+      case 'clean':
+        await handleCleanInteractive();
+        break;
+      case 'audit':
+        await handleAuditInteractive();
+        break;
     }
   }
 }
@@ -83,11 +96,49 @@ async function handleAuditInteractive() {
   }]);
 
   await runAudit({ domains });
-
-  console.log(''); // Ligne vide avant le retour au menu
+  console.log('');
 }
 
 async function handleDeployInteractive() {
+  // Essayer de charger la config locale
+  const { existsSync, readFileSync } = await import('fs');
+  const { join } = await import('path');
+
+  const configPath = join(process.cwd(), '.google-setup.json');
+  let localConfig = null;
+
+  if (existsSync(configPath)) {
+    try {
+      localConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  if (localConfig && localConfig.domain) {
+    console.log(chalk.green('✓ Configuration locale détectée'));
+    console.log(chalk.gray(`   Domaine: ${localConfig.domain}`));
+    console.log(chalk.gray(`   Projet: ${localConfig.projectName || ''}`));
+    console.log();
+
+    const { useLocal } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'useLocal',
+      message: 'Utiliser cette configuration ?',
+      default: true
+    }]);
+
+    if (useLocal) {
+      await runDeploy({
+        domain: localConfig.domain,
+        name: localConfig.projectName,
+        path: process.cwd()
+      });
+      console.log('');
+      return;
+    }
+  }
+
   const answers = await inquirer.prompt([
     {
       type: 'input',
@@ -103,9 +154,8 @@ async function handleDeployInteractive() {
     }
   ]);
 
-  await runDeploy(answers);
-
-  console.log(''); // Ligne vide avant le retour au menu
+  await runDeploy({ ...answers, path: process.cwd() });
+  console.log('');
 }
 
 async function handleStatusInteractive() {
@@ -117,8 +167,7 @@ async function handleStatusInteractive() {
   }]);
 
   await runStatus({ domain });
-
-  console.log(''); // Ligne vide avant le retour au menu
+  console.log('');
 }
 
 async function handleContinueInteractive() {
@@ -137,9 +186,8 @@ async function handleContinueInteractive() {
     }
   ]);
 
-  await runContinue(answers);
-
-  console.log(''); // Ligne vide avant le retour au menu
+  await runContinue({ ...answers, path: process.cwd() });
+  console.log('');
 }
 
 async function handleSyncInteractive() {
@@ -159,6 +207,74 @@ async function handleSyncInteractive() {
   ]);
 
   await runSync(answers);
+  console.log('');
+}
 
-  console.log(''); // Ligne vide avant le retour au menu
+async function handleAutoEditInteractive() {
+  console.log();
+  console.log(chalk.cyan.bold('🤖 AutoEdit - Pipeline IA 8 étapes'));
+  console.log(chalk.gray('Génère automatiquement un tracking plan en analysant vos fichiers HTML avec l\'IA.\n'));
+
+  console.log(chalk.white('Les 8 étapes du pipeline:'));
+  console.log(chalk.gray('  1. HTML Scan      - Scanner les fichiers HTML'));
+  console.log(chalk.gray('  2. AI Analysis    - Identifier les events avec l\'IA'));
+  console.log(chalk.gray('  3. Grouping       - Consolider les events similaires'));
+  console.log(chalk.gray('  4. Selector Finder - Trouver des sélecteurs CSS robustes'));
+  console.log(chalk.gray('  5. YAML Build     - Construire la configuration'));
+  console.log(chalk.gray('  6. YAML Merge     - Fusionner avec l\'existant'));
+  console.log(chalk.gray('  7. Validation     - Vérifier la cohérence'));
+  console.log(chalk.gray('  8. Generation     - Écrire les fichiers finaux\n'));
+
+  const { mode } = await inquirer.prompt([{
+    type: 'list',
+    name: 'mode',
+    message: 'Comment voulez-vous exécuter le pipeline ?',
+    choices: [
+      { name: '🚀 Exécuter toutes les étapes (recommandé)', value: 'all' },
+      { name: '1️⃣  Étape 1 - HTML Scan', value: '1' },
+      { name: '2️⃣  Étape 2 - AI Analysis', value: '2' },
+      { name: '3️⃣  Étape 3 - Grouping', value: '3' },
+      { name: '4️⃣  Étape 4 - Selector Finder', value: '4' },
+      { name: '5️⃣  Étape 5 - YAML Build', value: '5' },
+      { name: '6️⃣  Étape 6 - YAML Merge', value: '6' },
+      { name: '7️⃣  Étape 7 - Validation', value: '7' },
+      { name: '8️⃣  Étape 8 - Generation', value: '8' },
+      { name: '↩️  Retour au menu', value: 'back' }
+    ]
+  }]);
+
+  if (mode === 'back') {
+    return;
+  }
+
+  const answers = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'path',
+      message: 'Chemin du projet (entrée = répertoire courant) :',
+      default: process.cwd()
+    },
+    {
+      type: 'input',
+      name: 'source',
+      message: 'Chemin des fichiers HTML à scanner (entrée = même que projet) :',
+      default: ''
+    },
+    {
+      type: 'confirm',
+      name: 'debug',
+      message: 'Activer le mode debug (sauvegarder les données intermédiaires) ?',
+      default: true
+    }
+  ]);
+
+  const options = {
+    path: answers.path,
+    source: answers.source || answers.path,
+    debug: answers.debug,
+    step: mode !== 'all' ? mode : undefined
+  };
+
+  await runAutoEdit(options);
+  console.log('');
 }

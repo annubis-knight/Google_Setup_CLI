@@ -36,6 +36,7 @@ GTM + GA4 + Search Console + Tracking Code — en quelques commandes.
 │                         GOOGLE SETUP CLI                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
+│  🤖 AUTOEDIT       →  Analyse HTML avec IA → tracking plan auto     │
 │  📋 AUDIT          →  Analyse votre config existante (score A+ → F) │
 │  🚀 DEPLOY         →  Crée GTM + GA4 + balises from scratch         │
 │  📄 INIT-TRACKING  →  Génère le plan de taggage (YAML + MD)         │
@@ -51,6 +52,7 @@ GTM + GA4 + Search Console + Tracking Code — en quelques commandes.
 
 | Problème | Solution |
 |----------|----------|
+| Ne pas savoir quoi tracker | **AutoEdit** scanne votre HTML avec l'IA |
 | Configuration GTM manuelle longue et source d'erreurs | Déploiement automatisé en 1 commande |
 | Pas de documentation tracking | Génération de tracking-plan.yml + .md |
 | Code tracking à écrire à la main | Auto-génération de gtm-tracking.js |
@@ -179,7 +181,113 @@ google-setup init
 
 ## Workflows par cas d'usage
 
-### Cas 1 : Nouveau projet — Déploiement complet
+### Cas 1 : Analyser automatiquement un site avec l'IA (AutoEdit)
+
+**Situation** : Vous avez un site web et voulez générer automatiquement le plan de taggage.
+
+```bash
+# 1. Depuis le dossier de votre projet web
+cd /mon-projet
+
+# 2. Lancer l'analyse IA (pipeline 8 étapes)
+google-setup autoedit --debug
+
+# 3. Ou exécuter une étape spécifique
+google-setup autoedit --step=1   # Juste le scan HTML
+google-setup autoedit --step=2   # Analyse IA
+```
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  🤖 AUTOEDIT - Pipeline IA 8 étapes                                  │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  🔍 [1/8] Scanning HTML files...                                     │
+│     ✓ 12 fichiers HTML scannés                                       │
+│     ✓ 68 éléments interactifs détectés                               │
+│     ✓ Priorité: 15 high, 20 medium, 33 low                           │
+│     → Debug: 2024-01-15T14-30-00_step1_html_scan.json                 │
+│                                                                      │
+│  🤖 [2/8] AI Analysis (Gemini 2.0 Flash)...                          │
+│     ✓ 32 events recommandés                                          │
+│     → Debug: 2024-01-15T14-30-05_step2_ai_analysis.json               │
+│                                                                      │
+│  📊 [3/8] Grouping & consolidation...                                │
+│     ✓ 3 event_groups créés                                           │
+│     ✓ 8 events standalone                                            │
+│     ✓ Réduction: 40% moins de tags GTM                               │
+│                                                                      │
+│  🎯 [4/8] Finding robust selectors...                                │
+│     ✓ Sélecteurs analysés (score: 85/100 - A)                        │
+│     ✓ 45 éléments avec haute confiance                               │
+│     ⚠️  12 éléments nécessitent data-track                           │
+│                                                                      │
+│  🔧 [5/8] Building YAML config...                                    │
+│     ✓ Configuration YAML construite                                  │
+│                                                                      │
+│  🔀 [6/8] Merging with existing YAML...                              │
+│     ✓ Nouvelle configuration créée                                   │
+│                                                                      │
+│  ✅ [7/8] Validation...                                              │
+│     ✓ Validation OK (8 events, 3 groupes)                            │
+│                                                                      │
+│  📝 [8/8] Generation...                                              │
+│     ✓ Sauvegardé: tracking/gtm-tracking-plan.yml                     │
+│                                                                      │
+│ ┌────────────────────────────────────────────────────────────────┐   │
+│ │  Pipeline terminé avec succès !                                │   │
+│ │  Events: 8 standalone + 3 groupes                              │   │
+│ │  Sélecteurs: 85/100 (A)                                        │   │
+│ │  Modèle: Gemini 2.0 Flash                                      │   │
+│ └────────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Les 8 étapes du pipeline :**
+
+| Étape | Nom | Description |
+|-------|-----|-------------|
+| 1 | HTML Scan | Scanne les fichiers HTML et extrait les éléments interactifs |
+| 2 | AI Analysis | Analyse IA pour identifier les events GA4 pertinents |
+| 3 | Grouping | Consolide les events similaires (réduction tags GTM) |
+| 4 | Selector Finder | Trouve des sélecteurs CSS robustes |
+| 5 | YAML Build | Construit la configuration YAML |
+| 6 | YAML Merge | Fusionne avec le YAML existant (si présent) |
+| 7 | Validation | Vérifie la cohérence du plan |
+| 8 | Generation | Écrit les fichiers finaux |
+
+**Options utiles :**
+
+```bash
+# Prévisualiser sans sauvegarder
+google-setup autoedit --dry-run
+
+# Mode automatique (sans questions)
+google-setup autoedit --auto --force
+
+# Choisir le modèle IA
+google-setup autoedit --ai=claude-haiku
+google-setup autoedit --ai=gpt-4o-mini
+
+# Exclure des dossiers
+google-setup autoedit --exclude="temp,backup,old"
+
+# Scanner un dossier différent
+google-setup autoedit --source=/path/to/html/files
+```
+
+**Modèles IA disponibles :**
+
+| Modèle | Clé API requise | Coût approx. |
+|--------|-----------------|--------------|
+| `gemini-flash` (défaut) | `GOOGLE_AI_API_KEY` | $0.000075/1k tokens |
+| `claude-haiku` | `ANTHROPIC_API_KEY` | $0.001/1k tokens |
+| `gpt-4o-mini` | `OPENAI_API_KEY` | $0.00015/1k tokens |
+
+---
+
+### Cas 2 : Nouveau projet — Déploiement complet
 
 **Situation** : Vous avez un nouveau site sans aucun tracking.
 
@@ -201,7 +309,7 @@ google-setup deploy -d "mon-site.fr" -n "Mon Site"
 
 ---
 
-### Cas 2 : Projet existant — Créer le plan de taggage
+### Cas 3 : Projet existant — Créer le plan de taggage
 
 **Situation** : Vous avez un projet et voulez documenter/générer le tracking.
 
@@ -234,7 +342,7 @@ mon-projet/
 
 ---
 
-### Cas 3 : Synchroniser le code local avec GTM
+### Cas 4 : Synchroniser le code local avec GTM
 
 **Situation** : Vous avez un fichier tracking.js local et voulez créer les triggers GTM correspondants.
 
@@ -269,7 +377,7 @@ google-setup sync -d "mon-site.fr"
 
 ---
 
-### Cas 4 : Voir ce qui manque
+### Cas 5 : Voir ce qui manque
 
 **Situation** : Vous voulez savoir où en est la configuration d'un site.
 
@@ -310,7 +418,7 @@ google-setup status -d "mon-site.fr"
 
 ---
 
-### Cas 5 : Continuer un déploiement incomplet
+### Cas 6 : Continuer un déploiement incomplet
 
 **Situation** : Un déploiement a été interrompu ou vous voulez compléter ce qui manque.
 
@@ -324,7 +432,7 @@ google-setup continue -d "mon-site.fr" --auto
 
 ---
 
-### Cas 6 : Auditer plusieurs sites
+### Cas 7 : Auditer plusieurs sites
 
 **Situation** : Vous gérez plusieurs sites et voulez un état des lieux.
 
@@ -348,7 +456,7 @@ google-setup audit -d "site1.fr,site2.fr,site3.fr"
 
 ---
 
-### Cas 7 : Nettoyer GTM (supprimer les orphelins)
+### Cas 8 : Nettoyer GTM (supprimer les orphelins)
 
 **Situation** : Votre GTM contient des triggers/tags/variables qui ne sont plus utilisés dans votre code.
 
@@ -418,6 +526,7 @@ Affiche un menu avec toutes les options :
 Audit & Déploiement automatique Google Analytics
 
 ? Que voulez-vous faire ?
+  🤖 AutoEdit - Générer tracking plan avec IA (autoedit)
   📋 Voir la progression d'un site (status)
   ▶️  Continuer le déploiement (continue)
   🔄 Synchroniser projet local → GTM (sync)
@@ -434,6 +543,7 @@ Audit & Déploiement automatique Google Analytics
 | Commande | Description | Options |
 |----------|-------------|---------|
 | `init` | Configurer les credentials | - |
+| `autoedit` | Analyser HTML avec IA → tracking plan | `-p, --path` `-s, --source` `--step` `--ai` `--debug` `--dry-run` |
 | `status` | Voir la checklist | `-d, --domain` |
 | `continue` | Reprendre le déploiement | `-d, --domain` `--auto` |
 | `sync` | Sync local → GTM | `-p, --path` `-d, --domain` `--auto` |
@@ -598,10 +708,46 @@ export function initScrollTracking() {
 | Commande | Où l'exécuter |
 |----------|---------------|
 | `init` | N'importe où (config globale) |
+| `autoedit` | Dans le dossier de votre projet web (ou avec `--source`) |
 | `init-tracking` | Dans le dossier de votre projet web |
 | `generate-tracking` | Dans le dossier de votre projet web |
 | `sync` | Dans le dossier de votre projet web |
 | `status`, `continue`, `deploy`, `audit` | N'importe où (spécifier le domaine) |
+
+### Comment configurer l'IA pour autoedit ?
+
+Ajoutez une clé API dans un fichier `.env` à la racine de votre projet :
+
+```bash
+# Option 1 : Google AI (Gemini) - recommandé, moins cher
+GOOGLE_AI_API_KEY=AIza...
+
+# Option 2 : Anthropic (Claude)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Option 3 : OpenAI (GPT-4)
+OPENAI_API_KEY=sk-...
+```
+
+L'outil utilise automatiquement la première clé disponible.
+
+### Comment exécuter une seule étape du pipeline autoedit ?
+
+```bash
+# Exécuter seulement l'étape 1 (scan HTML)
+google-setup autoedit --step=1
+
+# L'état est sauvegardé dans tracking/debug/state.json
+# Vous pouvez ensuite exécuter les étapes suivantes
+google-setup autoedit --step=2
+google-setup autoedit --step=3
+# etc.
+```
+
+Utile pour :
+- Débugger une étape spécifique
+- Reprendre après une erreur
+- Modifier manuellement les données intermédiaires
 
 ### Mes fichiers existants vont être écrasés ?
 

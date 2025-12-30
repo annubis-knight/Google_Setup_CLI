@@ -69,8 +69,10 @@ export function generateTrackingJS(template = 'lead-gen', force = false) {
   // Détecter les fichiers tracking existants
   const localProject = detectLocalProject(process.cwd());
 
-  if (!force && localProject.trackingFiles.length > 0) {
-    const existingFile = localProject.trackingFiles[0];
+  // Vérifier si des fichiers tracking existent déjà
+  const trackingFiles = localProject.trackingFiles || [];
+  if (!force && trackingFiles.length > 0) {
+    const existingFile = trackingFiles[0];
     console.log(`   ⏭️ Fichier tracking existe déjà: ${existingFile}`);
     result.skipped = true;
     result.existingFile = existingFile;
