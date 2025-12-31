@@ -10,54 +10,12 @@ import inquirer from 'inquirer';
 import yaml from 'js-yaml';
 
 /**
- * Parse le fichier YAML et extrait les events avec leurs commentaires
+ * Parse le fichier YAML et extrait les events
+ * Utilise js-yaml pour un parsing fiable
  */
-function parseEventsWithComments(yamlContent) {
-  const lines = yamlContent.split('\n');
-  const events = [];
-  let currentEvent = null;
-  let currentComment = '';
-
-  for (const line of lines) {
-    // Détecter un nouveau event
-    if (line.match(/^\s{2}- event_name:/)) {
-      if (currentEvent) {
-        currentEvent.comment = currentComment.trim();
-        events.push(currentEvent);
-      }
-      const match = line.match(/event_name:\s*"([^"]+)"/);
-      currentEvent = { event_name: match ? match[1] : '' };
-      currentComment = '';
-    }
-    // Capturer les propriétés de l'event
-    else if (currentEvent && line.match(/^\s{4}\w+:/)) {
-      const propMatch = line.match(/^\s{4}(\w+):\s*(.+)/);
-      if (propMatch) {
-        let value = propMatch[2].trim();
-        // Nettoyer les guillemets
-        if (value.startsWith('"') && value.endsWith('"')) {
-          value = value.slice(1, -1);
-        }
-        // Convertir les nombres
-        if (!isNaN(value) && value !== '') {
-          value = parseInt(value, 10);
-        }
-        currentEvent[propMatch[1]] = value;
-      }
-    }
-    // Capturer le commentaire inline
-    else if (currentEvent && line.match(/^\s{4}#/)) {
-      currentComment = line.replace(/^\s{4}#\s*/, '');
-    }
-  }
-
-  // Ajouter le dernier event
-  if (currentEvent) {
-    currentEvent.comment = currentComment.trim();
-    events.push(currentEvent);
-  }
-
-  return events;
+function parseEvents(yamlContent) {
+  const parsed = yaml.load(yamlContent);
+  return parsed.events || [];
 }
 
 /**
@@ -103,7 +61,15 @@ events:
 
     for (const event of grouped[category]) {
       content += `
-  - event_name: "${event.event_name}"
+  - event_name: "${event.event_name}"`;
+
+      // Description en deuxième position (après event_name)
+      if (event.description) {
+        content += `
+    description: "${event.description}"`;
+      }
+
+      content += `
     category: "${event.category}"
     trigger: "${event.trigger}"`;
 
@@ -118,10 +84,6 @@ events:
       if (event.delay) {
         content += `
     delay: ${event.delay}`;
-      }
-      if (event.comment) {
-        content += `
-    # ${event.comment}`;
       }
       content += '\n';
     }
@@ -191,7 +153,7 @@ async function promptNewEvent() {
     },
     {
       type: 'input',
-      name: 'comment',
+      name: 'description',
       message: 'Description (optionnel) :'
     }
   ]);
@@ -221,7 +183,7 @@ export async function runEventSetup(options) {
   // Lire et parser le fichier
   const yamlContent = readFileSync(yamlPath, 'utf8');
   const parsed = yaml.load(yamlContent);
-  const events = parseEventsWithComments(yamlContent);
+  const events = parseEvents(yamlContent);
 
   console.log(chalk.gray(`   ${events.length} events disponibles dans le template\n`));
 
@@ -243,7 +205,7 @@ export async function runEventSetup(options) {
     console.log(chalk.cyan.bold(`\n${label}`));
 
     const choices = grouped[category].map(event => ({
-      name: `${event.event_name} - ${event.comment || event.selector || ''}`,
+      name: `${event.event_name} - ${event.description || event.selector || ''}`,
       value: event,
       checked: false // Par défaut non sélectionné
     }));

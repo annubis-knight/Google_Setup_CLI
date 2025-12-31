@@ -1155,10 +1155,6 @@ async function createGTMElements(tagmanager, workspacePath, template, variables)
   ],
   "triggers": [
     {
-      "name": "All Pages",
-      "type": "pageview"
-    },
-    {
       "name": "Event - clic_cta",
       "type": "customEvent",
       "customEventFilter": [

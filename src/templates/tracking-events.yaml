@@ -13,276 +13,276 @@ events:
   # ============================================
 
   - event_name: "form_submit"
+    description: "Soumission du formulaire de contact principal"
     category: "conversion"
     trigger: "submit"
     selector: "form[data-track='contact']"
-    # Soumission du formulaire de contact principal
 
   - event_name: "form_quote"
+    description: "Demande de devis"
     category: "conversion"
     trigger: "submit"
     selector: "form[data-track='quote']"
-    # Demande de devis
 
   - event_name: "form_callback"
+    description: "Demande de rappel téléphonique"
     category: "conversion"
     trigger: "submit"
     selector: "form[data-track='callback']"
-    # Demande de rappel téléphonique
 
   - event_name: "phone_click"
+    description: "Clic sur un numéro de téléphone"
     category: "conversion"
     trigger: "click"
     selector: "[data-track='phone']"
-    # Clic sur un numéro de téléphone
 
   - event_name: "email_click"
+    description: "Clic sur une adresse email"
     category: "conversion"
     trigger: "click"
     selector: "[data-track='email']"
-    # Clic sur une adresse email
 
   - event_name: "whatsapp_click"
+    description: "Clic sur un lien WhatsApp"
     category: "conversion"
     trigger: "click"
     selector: "[data-track='whatsapp']"
-    # Clic sur un lien WhatsApp
 
   - event_name: "booking_click"
+    description: "Clic sur un bouton de réservation"
     category: "conversion"
     trigger: "click"
     selector: "[data-track='booking']"
-    # Clic sur un bouton de réservation
 
   - event_name: "appointment_click"
+    description: "Clic sur un bouton de prise de rendez-vous"
     category: "conversion"
     trigger: "click"
     selector: "[data-track='appointment']"
-    # Clic sur un bouton de prise de rendez-vous
 
   # ============================================
   # LEADS
   # ============================================
 
   - event_name: "newsletter_submit"
+    description: "Inscription à la newsletter"
     category: "lead"
     trigger: "submit"
     selector: "form[data-track='newsletter']"
-    # Inscription à la newsletter
 
   - event_name: "download_pdf"
+    description: "Téléchargement d'un fichier PDF"
     category: "lead"
     trigger: "click"
     selector: "[data-track='download-pdf']"
-    # Téléchargement d'un fichier PDF
 
   - event_name: "download_doc"
+    description: "Téléchargement d'un document Word"
     category: "lead"
     trigger: "click"
     selector: "[data-track='download-doc']"
-    # Téléchargement d'un document Word
 
   - event_name: "download_file"
+    description: "Téléchargement d'un fichier (générique)"
     category: "lead"
     trigger: "click"
     selector: "[data-track='download']"
-    # Téléchargement d'un fichier (générique)
 
   - event_name: "demo_request"
+    description: "Demande de démonstration"
     category: "lead"
     trigger: "click"
     selector: "[data-track='demo']"
-    # Demande de démonstration
 
   - event_name: "trial_start"
+    description: "Démarrage d'un essai gratuit"
     category: "lead"
     trigger: "click"
     selector: "[data-track='trial']"
-    # Démarrage d'un essai gratuit
 
   - event_name: "catalog_request"
+    description: "Demande de catalogue"
     category: "lead"
     trigger: "click"
     selector: "[data-track='catalog']"
-    # Demande de catalogue
 
   # ============================================
   # ENGAGEMENT
   # ============================================
 
   - event_name: "cta_primary"
+    description: "CTA principal (conversion directe : devis, contact, achat)"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cta-primary']"
-    # CTA principal (conversion directe : devis, contact, achat)
 
   - event_name: "cta_secondary"
+    description: "CTA secondaire (en savoir plus, découvrir, voir les tarifs)"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cta-secondary']"
-    # CTA secondaire (en savoir plus, découvrir, voir les tarifs)
 
   - event_name: "cta_tertiary"
+    description: "CTA tertiaire (actions moins prioritaires)"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cta-tertiary']"
-    # CTA tertiaire (actions moins prioritaires)
 
   - event_name: "video_play"
+    description: "Lecture d'une vidéo"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='video']"
-    # Lecture d'une vidéo
 
   - event_name: "accordion_open"
+    description: "Ouverture d'un accordéon (FAQ, détails)"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='accordion']"
-    # Ouverture d'un accordéon (FAQ, détails)
 
   - event_name: "tab_click"
+    description: "Changement d'onglet"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='tab']"
-    # Changement d'onglet
 
   - event_name: "modal_open"
+    description: "Ouverture d'une modale"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='modal']"
-    # Ouverture d'une modale
 
   - event_name: "gallery_click"
+    description: "Clic sur une galerie d'images"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='gallery']"
-    # Clic sur une galerie d'images
 
   - event_name: "testimonial_click"
+    description: "Clic sur un témoignage client"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='testimonial']"
-    # Clic sur un témoignage client
 
   - event_name: "map_click"
+    description: "Interaction avec une carte"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='map']"
-    # Interaction avec une carte
 
   - event_name: "share_facebook"
+    description: "Partage sur Facebook"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='share-facebook']"
-    # Partage sur Facebook
 
   - event_name: "share_linkedin"
+    description: "Partage sur LinkedIn"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='share-linkedin']"
-    # Partage sur LinkedIn
 
   - event_name: "share_twitter"
+    description: "Partage sur Twitter/X"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='share-twitter']"
-    # Partage sur Twitter/X
 
   - event_name: "share_email"
+    description: "Partage par email"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='share-email']"
-    # Partage par email
 
   - event_name: "search_submit"
+    description: "Recherche interne sur le site"
     category: "engagement"
     trigger: "submit"
     selector: "form[data-track='search']"
-    # Recherche interne sur le site
 
   - event_name: "filter_change"
+    description: "Utilisation d'un filtre"
     category: "engagement"
     trigger: "change"
     selector: "[data-track='filter']"
-    # Utilisation d'un filtre
 
   - event_name: "scroll_25"
+    description: "Scroll à 25% de la page"
     category: "engagement"
     trigger: "scroll"
     threshold: 25
-    # Scroll à 25% de la page
 
   - event_name: "scroll_50"
+    description: "Scroll à 50% de la page"
     category: "engagement"
     trigger: "scroll"
     threshold: 50
-    # Scroll à 50% de la page
 
   - event_name: "scroll_75"
+    description: "Scroll à 75% de la page"
     category: "engagement"
     trigger: "scroll"
     threshold: 75
-    # Scroll à 75% de la page
 
   - event_name: "scroll_100"
+    description: "Scroll à 100% de la page (fin de page)"
     category: "engagement"
     trigger: "scroll"
     threshold: 100
-    # Scroll à 100% de la page (fin de page)
 
   - event_name: "read_30s"
+    description: "Temps passé sur la page : 30 secondes"
     category: "engagement"
     trigger: "timer"
     delay: 30
-    # Temps passé sur la page : 30 secondes
 
   - event_name: "read_60s"
+    description: "Temps passé sur la page : 1 minute"
     category: "engagement"
     trigger: "timer"
     delay: 60
-    # Temps passé sur la page : 1 minute
 
   - event_name: "read_120s"
+    description: "Temps passé sur la page : 2 minutes"
     category: "engagement"
     trigger: "timer"
     delay: 120
-    # Temps passé sur la page : 2 minutes
 
   - event_name: "cookie_accept"
+    description: "Acceptation de tous les cookies"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cookie-accept']"
-    # Acceptation de tous les cookies
 
   - event_name: "cookie_reject"
+    description: "Refus de tous les cookies"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cookie-reject']"
-    # Refus de tous les cookies
 
   - event_name: "cookie_customize"
+    description: "Ouverture des préférences cookies"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cookie-customize']"
-    # Ouverture des préférences cookies
 
   - event_name: "cookie_save"
+    description: "Sauvegarde des préférences cookies personnalisées"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cookie-save']"
-    # Sauvegarde des préférences cookies personnalisées
 
   - event_name: "privacy_policy"
+    description: "Consultation de la politique de confidentialité"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='privacy']"
-    # Consultation de la politique de confidentialité
 
   - event_name: "terms_click"
+    description: "Consultation des CGU/CGV"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='terms']"
-    # Consultation des CGU/CGV
 
 
   # ============================================
@@ -290,80 +290,79 @@ events:
   # ============================================
 
   - event_name: "menu_click"
+    description: "Clic sur un lien du menu principal"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='menu']"
-    # Clic sur un lien du menu principal
 
   - event_name: "logo_click"
+    description: "Clic sur le logo"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='logo']"
-    # Clic sur le logo
 
   - event_name: "footer_link"
+    description: "Clic sur un lien du footer"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='footer']"
-    # Clic sur un lien du footer
 
   - event_name: "breadcrumb_click"
+    description: "Clic sur le fil d'Ariane"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='breadcrumb']"
-    # Clic sur le fil d'Ariane
 
   - event_name: "pagination_click"
+    description: "Clic sur la pagination"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='pagination']"
-    # Clic sur la pagination
 
   - event_name: "back_to_top"
+    description: "Clic sur le bouton retour en haut"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='back-to-top']"
-    # Clic sur le bouton retour en haut
 
   - event_name: "language_switch"
+    description: "Changement de langue"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='language']"
-    # Changement de langue
 
   - event_name: "outbound_click"
+    description: "Clic sur un lien externe"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='outbound']"
-    # Clic sur un lien externe
 
   - event_name: "social_link"
+    description: "Clic sur un lien vers les réseaux sociaux"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='social']"
-    # Clic sur un lien vers les réseaux sociaux
 
   - event_name: "error_404"
+    description: "Page 404 affichée (page non trouvée)"
     category: "navigation"
     trigger: "load"
     selector: "body.error-404, body.page-404, [data-page='404']"
-    # Page 404 affichée (page non trouvée)
 
   - event_name: "error_form"
+    description: "Erreur de validation de formulaire affichée"
     category: "navigation"
     trigger: "click"
     selector: "[data-track='form-error']"
-    # Erreur de validation de formulaire affichée
 
   - event_name: "search_no_results"
+    description: "Recherche sans résultats"
     category: "navigation"
     trigger: "load"
     selector: "[data-track='no-results']"
-    # Recherche sans résultats
 
   - event_name: "error_page"
+    description: "Page d'erreur serveur affichée"
     category: "navigation"
     trigger: "load"
     selector: "body.error-500, body.error, [data-page='error']"
-    # Page d'erreur serveur affichée
-

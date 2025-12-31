@@ -83,21 +83,25 @@ project:
 
 events:
   - event_name: "form_submit"
+    description: "Soumission du formulaire de contact"
     category: "conversion"
     trigger: "submit"
     selector: "form[data-track='contact']"
 
   - event_name: "phone_click"
+    description: "Clic sur un lien téléphone"
     category: "conversion"
     trigger: "click"
     selector: "a[href^='tel:']"
 
   - event_name: "cta_click"
+    description: "Clic sur un bouton CTA"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cta']"
 
   - event_name: "scroll_50"
+    description: "Scroll à 50% de la page"
     category: "engagement"
     trigger: "scroll"
     threshold: 50
@@ -120,10 +124,11 @@ events:
 | `trigger` | Enum | `click`, `submit`, `change`, `scroll`, `timer`, `load` |
 | `selector` | String | Sélecteur CSS (sauf pour scroll/timer) |
 
-### Champs optionnels (selon trigger)
+### Champs optionnels
 
 | Champ | Pour trigger | Description |
 |-------|--------------|-------------|
+| `description` | Tous | Description humaine de l'event (ex: "Clic sur le bouton de contact") |
 | `threshold` | `scroll` | Pourcentage de scroll (ex: 50) |
 | `delay` | `timer` | Délai en secondes (ex: 30) |
 
@@ -500,21 +505,25 @@ project:
 
 events:
   - event_name: "form_submit"
+    description: "Soumission du formulaire de contact"
     category: "conversion"
     trigger: "submit"
     selector: "form[data-track='contact']"
 
   - event_name: "phone_click"
+    description: "Clic sur un numéro de téléphone"
     category: "conversion"
     trigger: "click"
     selector: "a[href^='tel:']"
 
   - event_name: "email_click"
+    description: "Clic sur une adresse email"
     category: "conversion"
     trigger: "click"
     selector: "a[href^='mailto:']"
 
   - event_name: "cta_click"
+    description: "Clic sur un bouton d'action principal"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='cta']"
@@ -530,31 +539,37 @@ project:
 
 events:
   - event_name: "newsletter_signup"
+    description: "Inscription à la newsletter"
     category: "lead"
     trigger: "submit"
     selector: "form[data-track='newsletter']"
 
   - event_name: "download_pdf"
+    description: "Téléchargement d'un document PDF"
     category: "lead"
     trigger: "click"
     selector: "a[href$='.pdf']"
 
   - event_name: "video_play"
+    description: "Lecture d'une vidéo"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='video']"
 
   - event_name: "scroll_50"
+    description: "Scroll à 50% de la page"
     category: "engagement"
     trigger: "scroll"
     threshold: 50
 
   - event_name: "read_time_60s"
+    description: "Temps de lecture de 60 secondes"
     category: "engagement"
     trigger: "timer"
     delay: 60
 
   - event_name: "share_social"
+    description: "Partage sur les réseaux sociaux"
     category: "engagement"
     trigger: "click"
     selector: "[data-track='share']"
@@ -578,6 +593,7 @@ events:
 | `category` | Oui | Affectation balise GTM |
 | `trigger` | Oui | Type addEventListener |
 | `selector` | Oui* | Cible CSS |
+| `description` | Non | Description humaine de l'event |
 | `threshold` | Non | Pour scroll uniquement |
 | `delay` | Non | Pour timer uniquement |
 

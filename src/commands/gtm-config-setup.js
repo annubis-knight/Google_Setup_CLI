@@ -92,7 +92,8 @@ function generateGtmConfig(projectInfo, events) {
       config.triggers.push({
         name: `CE - ${event.event_name}`,
         type: 'custom_event',
-        event_name: event.event_name
+        event_name: event.event_name,
+        description: event.description || null
       });
     }
   }
@@ -192,6 +193,10 @@ triggers:
 `;
     if (trigger.event_name) {
       content += `    event_name: "${trigger.event_name}"
+`;
+    }
+    if (trigger.description) {
+      content += `    # ${trigger.description}
 `;
     }
     content += '\n';

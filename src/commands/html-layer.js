@@ -3,12 +3,30 @@
  * Ajoute les attributs data-track aux éléments HTML
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from 'fs';
 import { join, extname, relative } from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import yaml from 'js-yaml';
 import * as cheerio from 'cheerio';
+
+/**
+ * Structure pour le rapport de debug
+ */
+function createDebugReport() {
+  return {
+    timestamp: new Date().toISOString(),
+    summary: {
+      eventsProcessed: 0,
+      eventsMatched: 0,
+      eventsNotMatched: 0,
+      elementsModified: 0,
+      filesModified: 0
+    },
+    events: [],
+    files: {}
+  };
+}
 
 /**
  * Trouve tous les fichiers HTML dans un répertoire
@@ -46,6 +64,49 @@ function extractDataTrackValue(selector) {
   // form[data-track='value'] -> value
   const match = selector.match(/\[data-track=['"]([^'"]+)['"]\]/);
   return match ? match[1] : null;
+}
+
+/**
+ * Génère un hash court (4 caractères) à partir d'une chaîne
+ * @param {string} str - Chaîne à hasher
+ * @returns {string} Hash de 4 caractères hexadécimaux
+ */
+function shortHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16).substring(0, 4).padStart(4, '0');
+}
+
+/**
+ * Génère un data-track-id unique pour un élément
+ * Format: {section}_{dataTrack}_{hash}
+ * @param {cheerio} $ - Instance cheerio
+ * @param {cheerio.Element} element - Élément cheerio
+ * @param {string} dataTrackValue - Valeur de data-track
+ * @param {number} index - Index de l'élément dans la page
+ * @returns {string} Identifiant unique généré
+ */
+function generateDataTrackId($, element, dataTrackValue, index) {
+  const $el = $(element);
+
+  // 1. Trouver la section parent avec un id
+  const sectionId = $el.closest('section[id]').attr('id') || 'main';
+
+  // 2. Générer un hash basé sur le contenu unique de l'élément
+  const uniqueContent = [
+    $el.text().trim().substring(0, 50),
+    $el.attr('href') || '',
+    $el.attr('class') || '',
+    index.toString()
+  ].join('|');
+  const hash = shortHash(uniqueContent);
+
+  // 3. Construire l'identifiant
+  return `${sectionId}_${dataTrackValue}_${hash}`;
 }
 
 /**
@@ -108,9 +169,22 @@ function getElementHints(event) {
       } else if (event.event_name.includes('cookie')) {
         hints.suggestedTags = ['[class*="cookie"]', '[id*="cookie"]', '[class*="consent"]'];
         hints.description = 'bouton cookie';
+      } else if (event.event_name.includes('whatsapp')) {
+        hints.suggestedTags = ['a[href*="whatsapp"]', 'a[href*="wa.me"]', '[class*="whatsapp"]', '[id*="whatsapp"]'];
+        hints.description = 'lien WhatsApp';
+      } else if (event.event_name.includes('messenger')) {
+        hints.suggestedTags = ['a[href*="messenger"]', 'a[href*="m.me"]', '[class*="messenger"]'];
+        hints.description = 'lien Messenger';
+      } else if (event.event_name.includes('chat')) {
+        hints.suggestedTags = ['[class*="chat"]', '[id*="chat"]', '[class*="livechat"]'];
+        hints.description = 'widget chat';
+      } else if (event.event_name.includes('calendly') || event.event_name.includes('booking') || event.event_name.includes('rdv')) {
+        hints.suggestedTags = ['a[href*="calendly"]', '[class*="calendly"]', '[class*="booking"]', '[class*="rdv"]'];
+        hints.description = 'lien de réservation';
       } else {
-        hints.suggestedTags = ['button', 'a', '[onclick]'];
-        hints.description = 'élément cliquable';
+        // Fallback : aucune suggestion automatique, forcer sélecteur manuel
+        hints.suggestedTags = [];
+        hints.description = 'élément non reconnu (sélecteur manuel requis)';
       }
       break;
     case 'change':
@@ -179,9 +253,14 @@ export async function runHtmlLayer(options) {
   const projectPath = options.path || process.cwd();
   const sourcePath = options.source || projectPath;
   const yamlPath = join(projectPath, 'tracking', 'tracking-events.yaml');
+  const debugMode = options.debug || false;
+
+  // Initialiser le rapport de debug
+  const report = createDebugReport();
+  report.config = { projectPath, sourcePath, debugMode };
 
   console.log();
-  console.log(chalk.cyan.bold('🏷️  [Étape 5/5] Ajout des Attributs HTML'));
+  console.log(chalk.cyan.bold('🏷️  [Étape 6/6] Ajout des Attributs HTML'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
@@ -216,6 +295,7 @@ export async function runHtmlLayer(options) {
   // Scanner les fichiers HTML
   console.log(chalk.gray(`   Scan des fichiers HTML dans: ${sourcePath}`));
   const htmlFiles = findHtmlFiles(sourcePath);
+  report.htmlFilesScanned = htmlFiles.map(f => relative(sourcePath, f));
 
   if (htmlFiles.length === 0) {
     console.log(chalk.yellow('⚠️  Aucun fichier HTML trouvé.'));
@@ -238,10 +318,30 @@ export async function runHtmlLayer(options) {
     if (!dataTrackValue) continue;
 
     const hints = getElementHints(event);
+    report.summary.eventsProcessed++;
+
+    // Préparer l'entrée du rapport pour cet event
+    const eventReport = {
+      event_name: event.event_name,
+      description: event.description || null,
+      selector: event.selector,
+      dataTrackValue,
+      trigger: event.trigger,
+      searchedSelectors: hints.suggestedTags,
+      elementType: hints.description,
+      status: 'pending',
+      matchesFound: 0,
+      matchesSelected: 0,
+      matches: []
+    };
 
     console.log(chalk.cyan(`\n📍 ${event.event_name}`));
-    console.log(chalk.gray(`   Recherche: ${hints.description}`));
-    console.log(chalk.gray(`   Attribut à ajouter: data-track="${dataTrackValue}"`));
+    if (event.description) {
+      console.log(chalk.white(`   ${event.description}`));
+    }
+    console.log(chalk.gray(`   Type: ${hints.description}`));
+    console.log(chalk.gray(`   Sélecteurs testés: ${hints.suggestedTags.length > 0 ? hints.suggestedTags.join(', ') : '(aucun - sélecteur manuel requis)'}`));
+    console.log(chalk.gray(`   Attribut: data-track="${dataTrackValue}"`));
 
     // Chercher dans tous les fichiers HTML
     const allMatches = [];
@@ -259,8 +359,12 @@ export async function runHtmlLayer(options) {
       }
     }
 
+    eventReport.matchesFound = allMatches.length;
+
     if (allMatches.length === 0) {
       console.log(chalk.yellow(`   ⚠️  Aucun élément trouvé automatiquement`));
+      eventReport.status = 'no_match';
+      report.summary.eventsNotMatched++;
 
       const { manualSelector } = await inquirer.prompt([{
         type: 'input',
@@ -270,6 +374,7 @@ export async function runHtmlLayer(options) {
       }]);
 
       if (manualSelector) {
+        eventReport.manualSelector = manualSelector;
         // Chercher avec le sélecteur manuel
         for (const [file, content] of Object.entries(htmlContents)) {
           const $ = cheerio.load(content);
@@ -283,27 +388,66 @@ export async function runHtmlLayer(options) {
                 dataTrackValue,
                 event: event.event_name
               });
+              eventReport.matchesSelected++;
             }
           });
         }
+        if (eventReport.matchesSelected > 0) {
+          eventReport.status = 'manual_match';
+          report.summary.eventsMatched++;
+        }
+      } else {
+        eventReport.status = 'skipped';
       }
+
+      report.events.push(eventReport);
       continue;
     }
 
     // Afficher les éléments trouvés
     console.log(chalk.green(`   ✓ ${allMatches.length} élément(s) trouvé(s)`));
 
-    // Créer les choix pour le prompt
+    // Stocker les détails des matches dans le rapport
+    eventReport.matches = allMatches.map(m => ({
+      file: m.relativePath,
+      tag: m.tag,
+      id: m.id,
+      classes: m.classes,
+      text: m.text?.substring(0, 50),
+      href: m.href,
+      matchedSelector: m.selector
+    }));
+
+    // Créer les choix pour le prompt avec affichage enrichi
     const choices = allMatches.map((match, i) => {
-      const label = `[${match.relativePath}] <${match.tag}> ${match.identifier.substring(0, 40)}`;
+      // Construire un affichage plus informatif
+      const lines = [];
+
+      // Ligne 1: Fichier
+      lines.push(chalk.cyan(`[${i + 1}] ${match.relativePath}`));
+
+      // Ligne 2: Tag HTML avec attributs clés
+      let tagPreview = `    <${match.tag}`;
+      if (match.id) tagPreview += ` id="${match.id}"`;
+      if (match.classes) tagPreview += ` class="${match.classes.substring(0, 30)}${match.classes.length > 30 ? '...' : ''}"`;
+      if (match.href) tagPreview += ` href="${match.href.substring(0, 50)}${match.href.length > 50 ? '...' : ''}"`;
+      tagPreview += '>';
+      lines.push(chalk.gray(tagPreview));
+
+      // Ligne 3: Texte si présent
+      if (match.text && match.text.length > 0) {
+        lines.push(chalk.white(`    Texte: "${match.text.substring(0, 60)}${match.text.length > 60 ? '...' : ''}"`));
+      }
+
       return {
-        name: label,
+        name: lines.join('\n'),
         value: i,
-        checked: true
+        checked: true,
+        short: `${match.relativePath} <${match.tag}>`  // Version courte pour après sélection
       };
     });
 
-    choices.push({ name: 'Aucun (ignorer cet event)', value: -1 });
+    choices.push({ name: chalk.yellow('Aucun (ignorer cet event)'), value: -1 });
 
     const { selected } = await inquirer.prompt([{
       type: 'checkbox',
@@ -325,11 +469,30 @@ export async function runHtmlLayer(options) {
         tag: match.tag,
         identifier: match.identifier
       });
+      eventReport.matchesSelected++;
     }
+
+    // Finaliser le rapport pour cet event
+    if (eventReport.matchesSelected > 0) {
+      eventReport.status = 'matched';
+      report.summary.eventsMatched++;
+    } else {
+      eventReport.status = 'skipped';
+    }
+    report.events.push(eventReport);
   }
 
   if (modifications.length === 0) {
     console.log(chalk.yellow('\n⚠️  Aucune modification à effectuer.'));
+
+    // Sauvegarder le rapport même si pas de modifications
+    const debugDir = join(projectPath, 'tracking', 'debug');
+    if (!existsSync(debugDir)) {
+      mkdirSync(debugDir, { recursive: true });
+    }
+    const reportPath = join(debugDir, 'html-layer-report.json');
+    writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(chalk.gray(`   Rapport: tracking/debug/html-layer-report.json`));
     return;
   }
 
@@ -363,14 +526,38 @@ export async function runHtmlLayer(options) {
 
   // Appliquer les modifications
   let modifiedFiles = 0;
+  let dataTrackIdCount = 0;
 
   for (const [file, mods] of Object.entries(byFile)) {
     let content = htmlContents[file];
     const $ = cheerio.load(content, { decodeEntities: false });
+    const relPath = relative(sourcePath, file);
 
-    for (const mod of mods) {
+    // Initialiser l'entrée du fichier dans le rapport
+    report.files[relPath] = { modifications: [] };
+
+    for (let i = 0; i < mods.length; i++) {
+      const mod = mods[i];
       if (mod.element) {
+        // Ajouter data-track
         mod.element.attr('data-track', mod.dataTrackValue);
+
+        // Générer et ajouter data-track-id (seulement si pas déjà présent)
+        let trackId = mod.element.attr('data-track-id');
+        if (!trackId) {
+          trackId = generateDataTrackId($, mod.element, mod.dataTrackValue, i);
+          mod.element.attr('data-track-id', trackId);
+          dataTrackIdCount++;
+        }
+
+        // Ajouter au rapport
+        report.files[relPath].modifications.push({
+          event: mod.event,
+          dataTrack: mod.dataTrackValue,
+          dataTrackId: trackId,
+          tag: mod.tag,
+          identifier: mod.identifier
+        });
       }
     }
 
@@ -379,10 +566,25 @@ export async function runHtmlLayer(options) {
     modifiedFiles++;
   }
 
+  // Mettre à jour le résumé
+  report.summary.elementsModified = modifications.length;
+  report.summary.filesModified = modifiedFiles;
+
   console.log();
   console.log(chalk.green.bold('✅ Attributs HTML ajoutés !'));
   console.log(chalk.gray(`   ${modifiedFiles} fichier(s) modifié(s)`));
   console.log(chalk.gray(`   ${modifications.length} attribut(s) data-track ajouté(s)`));
+  console.log(chalk.gray(`   ${dataTrackIdCount} attribut(s) data-track-id généré(s)`));
+
+  // Sauvegarder le rapport de debug
+  const debugDir = join(projectPath, 'tracking', 'debug');
+  if (!existsSync(debugDir)) {
+    mkdirSync(debugDir, { recursive: true });
+  }
+  const reportPath = join(debugDir, 'html-layer-report.json');
+  writeFileSync(reportPath, JSON.stringify(report, null, 2));
+  console.log(chalk.gray(`   Rapport: tracking/debug/html-layer-report.json`));
+
   console.log();
   console.log(chalk.white('Workflow terminé ! Vérifiez vos fichiers HTML.'));
   console.log();

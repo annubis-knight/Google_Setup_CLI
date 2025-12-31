@@ -12,6 +12,7 @@ import { handleGtmConfigSetupInteractive } from './gtm-config-setup.js';
 import { handleHtmlLayerInteractive } from './html-layer.js';
 import { handleCleanInteractive } from './clean.js';
 import { runAutoEdit } from './autoedit.js';
+import { handleGenerateTrackingInteractive } from './generate-tracking.js';
 
 export async function interactiveMode() {
   console.clear();
@@ -26,12 +27,13 @@ export async function interactiveMode() {
       name: 'action',
       message: 'Que voulez-vous faire ?',
       choices: [
-        new inquirer.Separator(chalk.cyan('─── WORKFLOW TRACKING (5 étapes) ───')),
+        new inquirer.Separator(chalk.cyan('─── WORKFLOW TRACKING (6 étapes) ───')),
         { name: '1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)', value: 'init-tracking' },
         { name: '2️⃣  [Étape 2] Sélectionner les events (event-setup)', value: 'event-setup' },
         { name: '3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)', value: 'gtm-config-setup' },
-        { name: '4️⃣  [Étape 4] Déployer dans GTM (deploy)', value: 'deploy' },
-        { name: '5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)', value: 'html-layer' },
+        { name: '4️⃣  [Étape 4] Générer tracking.js (generate-tracking)', value: 'generate-tracking' },
+        { name: '5️⃣  [Étape 5] Déployer dans GTM (deploy)', value: 'deploy' },
+        { name: '6️⃣  [Étape 6] Ajouter attributs HTML (html-layer)', value: 'html-layer' },
         new inquirer.Separator(chalk.cyan('─── AUTRES COMMANDES ───')),
         { name: '🤖 AutoEdit - Générer tracking avec IA', value: 'autoedit' },
         { name: '📋 Voir la progression KPI (status)', value: 'status' },
@@ -58,6 +60,9 @@ export async function interactiveMode() {
         break;
       case 'gtm-config-setup':
         await handleGtmConfigSetupInteractive();
+        break;
+      case 'generate-tracking':
+        await handleGenerateTrackingInteractive();
         break;
       case 'deploy':
         await handleDeployInteractive();
