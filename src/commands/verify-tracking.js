@@ -7,7 +7,7 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join, dirname, relative, basename } from 'path';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import yaml from 'js-yaml';
@@ -17,16 +17,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Dossiers typiques de déploiement (où les fichiers doivent être pour la prod)
+ * Dossiers sources typiques (où tracking.js doit être pour le dev/bundling)
  */
-const DEPLOY_FOLDERS = ['public', 'dist', 'build', 'out', 'www', '.', 'src'];
+const SOURCE_FOLDERS = ['src', 'js', 'assets/js', 'scripts', '.'];
 
 /**
  * Dossiers à ignorer lors du scan
  */
 const IGNORE_PATTERNS = [
   'node_modules/**', '.git/**', 'tracking/**',
-  '.firebase/**', '.cache/**', 'coverage/**'
+  '.firebase/**', '.cache/**', 'coverage/**',
+  'dist/**', 'build/**', 'out/**'
 ];
 
 /**
@@ -35,7 +36,7 @@ const IGNORE_PATTERNS = [
 const CATEGORY = {
   CONFIG: 'Configuration',
   FILES: 'Fichiers',
-  HTML: 'Intégration HTML',
+  INTEGRATION: 'Intégration Code',
   PROD: 'Production Ready'
 };
 
@@ -59,8 +60,8 @@ const CHECKS = [
     id: 'tracking_rules',
     name: 'tracking-rules.yaml',
     category: CATEGORY.CONFIG,
-    description: 'Fichier de règles pour auto-détection',
-    critical: false,
+    description: 'Fichier de règles pour /track-html-elements',
+    critical: true, // Maintenant critique
     check: (ctx) => existsSync(join(ctx.projectPath, 'tracking', 'tracking-rules.yaml')),
     fix: 'google-setup init-tracking'
   },
@@ -77,7 +78,6 @@ const CHECKS = [
         const content = yaml.load(readFileSync(eventsPath, 'utf8'));
         const ga4Id = content.project?.ga4_measurement_id || '';
         ctx.ga4Id = ga4Id;
-        // Valider le format G-XXXXXXXXXX
         return /^G-[A-Z0-9]{10,}$/.test(ga4Id);
       } catch (e) {
         return false;
@@ -98,7 +98,6 @@ const CHECKS = [
         const content = yaml.load(readFileSync(eventsPath, 'utf8'));
         const gtmId = content.project?.gtm_container_id || '';
         ctx.gtmId = gtmId;
-        // Valider le format GTM-XXXXXXX
         return /^GTM-[A-Z0-9]{7,}$/.test(gtmId);
       } catch (e) {
         return false;
@@ -122,6 +121,18 @@ const CHECKS = [
         ctx.enabledEvents = enabled;
         ctx.enabledEventsCount = enabled.length;
         ctx.totalEventsCount = events.length;
+
+        // Extraire les valeurs data-track attendues depuis les selectors
+        ctx.expectedDataTrackValues = new Set();
+        for (const event of enabled) {
+          if (event.selector) {
+            const match = event.selector.match(/data-track=["']([^"']+)["']/);
+            if (match) {
+              ctx.expectedDataTrackValues.add(match[1]);
+            }
+          }
+        }
+
         return enabled.length > 0;
       } catch (e) {
         return false;
@@ -160,7 +171,7 @@ const CHECKS = [
     description: 'Script de tracking existe',
     critical: true,
     check: async (ctx) => {
-      // Chercher tracking.js partout dans le projet
+      // Chercher tracking.js dans les dossiers sources (pas dist/build)
       const files = await glob('**/tracking.js', {
         cwd: ctx.projectPath,
         ignore: IGNORE_PATTERNS
@@ -170,59 +181,104 @@ const CHECKS = [
 
       ctx.trackingJsFiles = files;
       ctx.trackingJsPath = files[0];
+      ctx.trackingJsFolder = dirname(files[0]);
 
-      // Lire le contenu pour vérifier qu'il n'est pas vide
+      // Lire le contenu (pas de vérification de taille minimale)
       const content = readFileSync(join(ctx.projectPath, files[0]), 'utf8');
       ctx.trackingJsSize = content.length;
-      return content.length > 100; // Minimum viable
+      ctx.trackingJsContent = content;
+
+      return true;
     },
     fix: 'google-setup generate-tracking'
   },
   {
-    id: 'tracking_js_in_deploy_folder',
-    name: 'tracking.js dans dossier déployable',
+    id: 'tracking_js_in_source_folder',
+    name: 'tracking.js dans dossier source',
     category: CATEGORY.FILES,
-    description: 'Le script est dans public/, dist/, ou racine',
+    description: 'Le script est dans src/, js/, ou racine (pour webpack)',
     critical: true,
     check: (ctx) => {
       if (!ctx.trackingJsPath) return false;
 
-      const folder = dirname(ctx.trackingJsPath);
-      const folderName = folder === '.' ? '.' : basename(folder);
+      const folder = ctx.trackingJsFolder;
 
-      // Vérifier si c'est dans un dossier déployable
-      const isDeployable = DEPLOY_FOLDERS.some(d =>
-        folder === d || folder.startsWith(d + '/') || folder.startsWith(d + '\\')
+      // Vérifier si c'est dans un dossier source (pas dist/build)
+      const isInSource = SOURCE_FOLDERS.some(d =>
+        folder === d || folder.startsWith(d + '/') || folder.startsWith(d + '\\') || folder === '.'
       );
 
-      ctx.trackingJsFolder = folder;
-      ctx.trackingJsDeployable = isDeployable;
+      ctx.trackingJsInSource = isInSource;
 
-      return isDeployable;
+      return isInSource;
     },
-    fix: 'Déplacez tracking.js dans public/ ou le dossier de déploiement'
+    fix: 'Placez tracking.js dans src/ ou js/ pour qu\'il soit bundlé par webpack'
   },
 
   // ═══════════════════════════════════════════════════════════════
-  // INTÉGRATION HTML
+  // INTÉGRATION CODE (JS/HTML)
   // ═══════════════════════════════════════════════════════════════
   {
-    id: 'gtm_snippet_present',
-    name: 'GTM snippet dans HTML',
-    category: CATEGORY.HTML,
-    description: 'Le code GTM est présent dans le <head>',
+    id: 'tracking_js_imported_in_js',
+    name: 'tracking.js importé dans JS',
+    category: CATEGORY.INTEGRATION,
+    description: 'Import dans main.js, app.js ou index.js',
     critical: true,
     check: async (ctx) => {
-      const htmlFiles = await glob('**/*.html', {
+      // Chercher les fichiers JS d'entrée typiques
+      const entryFiles = await glob('**/{main,app,index}.{js,ts,jsx,tsx}', {
         cwd: ctx.projectPath,
         ignore: IGNORE_PATTERNS
       });
 
-      for (const file of htmlFiles) {
+      ctx.jsImportFiles = [];
+
+      for (const file of entryFiles) {
         const content = readFileSync(join(ctx.projectPath, file), 'utf8');
-        // Chercher le pattern GTM
-        if (content.includes('googletagmanager.com/gtm.js') ||
-            content.includes('GTM-') && content.includes('gtm.js')) {
+        // Chercher import ou require de tracking
+        if (content.includes('tracking') &&
+            (content.includes('import') || content.includes('require'))) {
+          ctx.jsImportFiles.push(file);
+        }
+      }
+
+      // Si pas trouvé dans les entry files, chercher dans tous les JS
+      if (ctx.jsImportFiles.length === 0) {
+        const allJsFiles = await glob('**/*.{js,ts,jsx,tsx}', {
+          cwd: ctx.projectPath,
+          ignore: IGNORE_PATTERNS
+        });
+
+        for (const file of allJsFiles) {
+          const content = readFileSync(join(ctx.projectPath, file), 'utf8');
+          if (content.match(/import\s+.*from\s+['"].*tracking/i) ||
+              content.match(/require\s*\(\s*['"].*tracking/i)) {
+            ctx.jsImportFiles.push(file);
+          }
+        }
+      }
+
+      return ctx.jsImportFiles.length > 0;
+    },
+    fix: 'Ajoutez dans main.js: import { initTracking } from \'./tracking.js\''
+  },
+  {
+    id: 'gtm_snippet_in_html',
+    name: 'GTM snippet dans HTML',
+    category: CATEGORY.INTEGRATION,
+    description: 'Code GTM copié depuis tagmanager.google.com',
+    critical: true,
+    check: async (ctx) => {
+      // Chercher dans HTML et templates
+      const files = await glob('**/*.{html,ejs,hbs,pug,php}', {
+        cwd: ctx.projectPath,
+        ignore: IGNORE_PATTERNS
+      });
+
+      for (const file of files) {
+        const content = readFileSync(join(ctx.projectPath, file), 'utf8');
+        // Le snippet GTM contient cette URL
+        if (content.includes('googletagmanager.com/gtm.js')) {
           ctx.gtmSnippetFile = file;
 
           // Vérifier que c'est le bon GTM ID
@@ -232,130 +288,92 @@ const CHECKS = [
           return true;
         }
       }
+
+      // Si pas trouvé, vérifier aussi dans les JS (certains l'injectent dynamiquement)
+      const jsFiles = await glob('**/*.{js,ts}', {
+        cwd: ctx.projectPath,
+        ignore: IGNORE_PATTERNS
+      });
+
+      for (const file of jsFiles) {
+        const content = readFileSync(join(ctx.projectPath, file), 'utf8');
+        if (content.includes('googletagmanager.com/gtm.js')) {
+          ctx.gtmSnippetFile = file + ' (injection JS)';
+          if (ctx.gtmId && content.includes(ctx.gtmId)) {
+            ctx.gtmSnippetCorrectId = true;
+          }
+          return true;
+        }
+      }
+
       return false;
     },
-    fix: 'Ajoutez le snippet GTM dans le <head> de vos pages HTML'
+    fix: 'Copiez le snippet GTM depuis tagmanager.google.com > Admin > Install'
   },
   {
     id: 'gtm_snippet_correct_id',
     name: 'GTM ID correct dans snippet',
-    category: CATEGORY.HTML,
+    category: CATEGORY.INTEGRATION,
     description: 'Le snippet utilise le bon GTM ID',
     critical: true,
     check: (ctx) => {
       return ctx.gtmSnippetCorrectId === true;
     },
-    fix: 'Vérifiez que le snippet GTM utilise le bon GTM ID (celui de tracking-events.yaml)'
+    fix: 'Le snippet GTM doit contenir votre ID (voir tracking-events.yaml)'
   },
   {
-    id: 'tracking_js_imported',
-    name: 'tracking.js importé',
-    category: CATEGORY.HTML,
-    description: 'Le script est inclus dans le HTML',
+    id: 'data_track_per_event',
+    name: 'data-track par event activé',
+    category: CATEGORY.INTEGRATION,
+    description: 'Chaque event activé a au moins 1 élément HTML',
     critical: true,
     check: async (ctx) => {
-      const htmlFiles = await glob('**/*.html', {
+      if (!ctx.expectedDataTrackValues || ctx.expectedDataTrackValues.size === 0) {
+        return false;
+      }
+
+      // Scanner tous les fichiers HTML/templates
+      const htmlFiles = await glob('**/*.{html,ejs,hbs,pug,php,jsx,tsx,vue}', {
         cwd: ctx.projectPath,
         ignore: IGNORE_PATTERNS
       });
 
-      ctx.htmlWithTrackingJs = [];
-
-      for (const file of htmlFiles) {
-        const content = readFileSync(join(ctx.projectPath, file), 'utf8');
-        if (content.includes('tracking.js')) {
-          ctx.htmlWithTrackingJs.push(file);
-        }
-      }
-
-      return ctx.htmlWithTrackingJs.length > 0;
-    },
-    fix: 'Ajoutez <script src="tracking.js"></script> avant </body>'
-  },
-  {
-    id: 'tracking_js_path_valid',
-    name: 'Chemin tracking.js valide',
-    category: CATEGORY.HTML,
-    description: 'Le chemin d\'import correspond au fichier réel',
-    critical: true,
-    check: async (ctx) => {
-      if (!ctx.htmlWithTrackingJs || ctx.htmlWithTrackingJs.length === 0) return false;
-      if (!ctx.trackingJsPath) return false;
-
-      // Lire le premier HTML qui importe tracking.js
-      const htmlFile = ctx.htmlWithTrackingJs[0];
-      const htmlContent = readFileSync(join(ctx.projectPath, htmlFile), 'utf8');
-
-      // Extraire le chemin du script
-      const scriptMatch = htmlContent.match(/<script[^>]+src=["']([^"']*tracking\.js[^"']*)["']/);
-      if (!scriptMatch) return false;
-
-      const importPath = scriptMatch[1];
-      ctx.trackingJsImportPath = importPath;
-
-      // Résoudre le chemin relatif depuis le HTML
-      const htmlDir = dirname(htmlFile);
-      let resolvedPath;
-
-      if (importPath.startsWith('/')) {
-        // Chemin absolu depuis la racine
-        resolvedPath = importPath.slice(1);
-      } else if (importPath.startsWith('./') || importPath.startsWith('../')) {
-        // Chemin relatif
-        resolvedPath = join(htmlDir, importPath);
-      } else {
-        // Chemin simple (même dossier ou racine)
-        resolvedPath = join(htmlDir, importPath);
-      }
-
-      // Normaliser les chemins
-      const normalizedResolved = resolvedPath.replace(/\\/g, '/');
-      const normalizedActual = ctx.trackingJsPath.replace(/\\/g, '/');
-
-      ctx.resolvedTrackingJsPath = normalizedResolved;
-
-      // Vérifier si le fichier existe à ce chemin
-      const fileExists = existsSync(join(ctx.projectPath, resolvedPath)) ||
-                        existsSync(join(ctx.projectPath, importPath.replace(/^\//, '')));
-
-      return fileExists;
-    },
-    fix: 'Corrigez le chemin src dans <script src="...tracking.js">'
-  },
-  {
-    id: 'data_track_present',
-    name: 'Attributs data-track',
-    category: CATEGORY.HTML,
-    description: 'Au moins un élément a data-track',
-    critical: true,
-    check: async (ctx) => {
-      const htmlFiles = await glob('**/*.html', {
-        cwd: ctx.projectPath,
-        ignore: IGNORE_PATTERNS
-      });
-
-      let total = 0;
-      const byFile = [];
-      const uniqueValues = new Set();
+      const foundValues = new Set();
+      let totalCount = 0;
 
       for (const file of htmlFiles) {
         const content = readFileSync(join(ctx.projectPath, file), 'utf8');
         const matches = content.match(/data-track=["']([^"']+)["']/g);
         if (matches) {
-          total += matches.length;
-          byFile.push({ file, count: matches.length });
+          totalCount += matches.length;
           matches.forEach(m => {
             const value = m.match(/["']([^"']+)["']/)[1];
-            uniqueValues.add(value);
+            foundValues.add(value);
           });
         }
       }
 
-      ctx.dataTrackCount = total;
-      ctx.dataTrackByFile = byFile;
-      ctx.dataTrackValues = [...uniqueValues];
+      ctx.dataTrackCount = totalCount;
+      ctx.dataTrackValues = [...foundValues];
 
-      return total > 0;
+      // Comparer avec les events activés
+      const expected = [...ctx.expectedDataTrackValues];
+      const missing = expected.filter(e => {
+        // Normaliser pour comparaison (cta-primary vs cta_primary)
+        const normalized = e.replace(/-/g, '_');
+        return ![...foundValues].some(f =>
+          f === e || f.replace(/-/g, '_') === normalized || f === e.replace(/_/g, '-')
+        );
+      });
+
+      ctx.missingDataTrack = missing;
+      ctx.matchedDataTrack = expected.length - missing.length;
+
+      // OK si au moins 80% des events ont leur data-track
+      const coverage = ctx.matchedDataTrack / expected.length;
+      ctx.dataTrackCoverage = Math.round(coverage * 100);
+
+      return coverage >= 0.8;
     },
     fix: '/track-html-elements (Claude Code) ou google-setup html-layer'
   },
@@ -364,49 +382,10 @@ const CHECKS = [
   // PRODUCTION READY
   // ═══════════════════════════════════════════════════════════════
   {
-    id: 'events_match_datatrack',
-    name: 'Events ↔ data-track cohérents',
-    category: CATEGORY.PROD,
-    description: 'Les attributs HTML correspondent aux events activés',
-    critical: false,
-    check: (ctx) => {
-      if (!ctx.enabledEvents || !ctx.dataTrackValues) return false;
-
-      // Extraire les valeurs attendues des selectors des events activés
-      const expectedValues = new Set();
-      for (const event of ctx.enabledEvents) {
-        if (event.selector) {
-          // Extraire la valeur de data-track du selector
-          const match = event.selector.match(/data-track=["']([^"']+)["']/);
-          if (match) {
-            expectedValues.add(match[1]);
-          }
-        }
-      }
-
-      // Comparer avec les valeurs trouvées dans le HTML
-      const found = ctx.dataTrackValues;
-      const matched = found.filter(v => {
-        // Normaliser pour comparaison (cta-primary vs cta_primary)
-        const normalized = v.replace(/-/g, '_');
-        return [...expectedValues].some(e =>
-          e === v || e.replace(/-/g, '_') === normalized
-        );
-      });
-
-      ctx.matchedDataTrack = matched.length;
-      ctx.expectedDataTrack = expectedValues.size;
-
-      // Au moins 50% des data-track doivent correspondre
-      return matched.length >= Math.min(found.length, expectedValues.size) * 0.5;
-    },
-    fix: 'Vérifiez que les valeurs data-track correspondent aux selectors dans tracking-events.yaml'
-  },
-  {
     id: 'no_placeholder_ids',
     name: 'Pas d\'IDs placeholder',
     category: CATEGORY.PROD,
-    description: 'Pas de G-XXXXXXXXXX ou GTM-XXXXXXX',
+    description: 'Vrais IDs GA4 et GTM (pas XXXX)',
     critical: true,
     check: (ctx) => {
       const ga4Valid = ctx.ga4Id && !ctx.ga4Id.includes('XXXX');
@@ -414,6 +393,44 @@ const CHECKS = [
       return ga4Valid && gtmValid;
     },
     fix: 'Remplacez les IDs placeholder par vos vrais IDs GA4 et GTM'
+  },
+  {
+    id: 'webpack_config_exists',
+    name: 'Config webpack/bundler',
+    category: CATEGORY.PROD,
+    description: 'webpack.config.js ou vite.config.js présent',
+    critical: false, // Warning seulement
+    check: async (ctx) => {
+      const bundlerConfigs = [
+        'webpack.config.js', 'webpack.config.ts',
+        'vite.config.js', 'vite.config.ts',
+        'rollup.config.js', 'rollup.config.ts',
+        'esbuild.config.js', 'parcel.config.js',
+        'next.config.js', 'nuxt.config.js'
+      ];
+
+      for (const config of bundlerConfigs) {
+        if (existsSync(join(ctx.projectPath, config))) {
+          ctx.bundlerConfig = config;
+          return true;
+        }
+      }
+
+      // Vérifier package.json pour scripts de build
+      const pkgPath = join(ctx.projectPath, 'package.json');
+      if (existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+          if (pkg.scripts?.build) {
+            ctx.bundlerConfig = 'package.json (build script)';
+            return true;
+          }
+        } catch (e) {}
+      }
+
+      return false;
+    },
+    fix: 'Ajoutez webpack/vite si vous utilisez un bundler (optionnel pour sites statiques)'
   }
 ];
 
@@ -442,23 +459,28 @@ function displayCheck(check, passed, ctx) {
         console.log(chalk.gray(`      ${ctx.gtmTags} tags, ${ctx.gtmTriggers} triggers`));
         break;
       case 'tracking_js_exists':
-        console.log(chalk.gray(`      → ${ctx.trackingJsPath} (${Math.round(ctx.trackingJsSize/1024)}KB)`));
+        console.log(chalk.gray(`      → ${ctx.trackingJsPath}`));
         break;
-      case 'tracking_js_in_deploy_folder':
+      case 'tracking_js_in_source_folder':
         console.log(chalk.gray(`      → dossier: ${ctx.trackingJsFolder}`));
         break;
-      case 'gtm_snippet_present':
+      case 'tracking_js_imported_in_js':
+        console.log(chalk.gray(`      → ${ctx.jsImportFiles.join(', ')}`));
+        break;
+      case 'gtm_snippet_in_html':
         console.log(chalk.gray(`      → ${ctx.gtmSnippetFile}`));
         break;
-      case 'tracking_js_imported':
-        console.log(chalk.gray(`      → ${ctx.htmlWithTrackingJs.length} fichier(s)`));
+      case 'data_track_per_event':
+        console.log(chalk.gray(`      ${ctx.matchedDataTrack}/${ctx.expectedDataTrackValues.size} events couverts (${ctx.dataTrackCoverage}%)`));
         break;
-      case 'data_track_present':
-        console.log(chalk.gray(`      ${ctx.dataTrackCount} attributs (${ctx.dataTrackValues.length} uniques)`));
+      case 'webpack_config_exists':
+        console.log(chalk.gray(`      → ${ctx.bundlerConfig}`));
         break;
-      case 'events_match_datatrack':
-        console.log(chalk.gray(`      ${ctx.matchedDataTrack} correspondances`));
-        break;
+    }
+  } else {
+    // Détails supplémentaires si échoué
+    if (check.id === 'data_track_per_event' && ctx.missingDataTrack?.length > 0) {
+      console.log(chalk.gray(`      Manquants: ${ctx.missingDataTrack.slice(0, 5).join(', ')}${ctx.missingDataTrack.length > 5 ? '...' : ''}`));
     }
   }
 }
@@ -520,8 +542,9 @@ export async function runVerifyTracking(options) {
     console.log();
     console.log(chalk.white('  Prochaines étapes :'));
     console.log(chalk.cyan('    1. google-setup deploy      → Déployer dans GTM'));
-    console.log(chalk.cyan('    2. firebase deploy          → Déployer le site'));
-    console.log(chalk.cyan('    3. Publier le container GTM → GTM > Submit > Publish'));
+    console.log(chalk.cyan('    2. npm run build            → Builder le projet'));
+    console.log(chalk.cyan('    3. firebase deploy          → Déployer le site'));
+    console.log(chalk.cyan('    4. Publier le container GTM → GTM > Submit > Publish'));
     console.log();
     console.log(chalk.gray('  Votre tracking fonctionnera à 100% après ces étapes.'));
 
