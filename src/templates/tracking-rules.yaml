@@ -1,0 +1,166 @@
+# tracking-rules.yaml
+# Règles de détection pour /track-html-elements
+# Les indices sont descriptifs - Claude les interprète en analysant le HTML et CSS
+
+rulesets:
+
+  cta_primary:
+    description: "Bouton d'action principal du site (CTA de conversion)"
+    target_tags: ["button", "a", "div[role=button]"]
+
+    indices:
+      - texte: "Fond de couleur primaire (pas outline, pas ghost, pas transparent)"
+        weight: 20
+
+      - texte: "Texte court avec verbe d'action fort (Commencer, Essayer, Démarrer, S'inscrire, Réserver, Obtenir...)"
+        weight: 15
+
+      - texte: "Isolé ou visuellement mis en avant dans sa section (seul bouton ou le plus visible)"
+        weight: 15
+
+      - texte: "Présent dans une zone critique (hero, header, above-the-fold, bannière)"
+        weight: 15
+
+      - texte: "Contenu identique ou similaire répété sur plusieurs pages du site"
+        weight: 10
+
+      - texte: "Taille plus grande que les autres boutons de la section (padding, font-size)"
+        weight: 10
+
+      - texte: "Pas de style outline, ghost, ou link (fond plein visible)"
+        weight: 10
+
+      - texte: "A un ID ou une classe distinctive (cta, action, primary, main...)"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  cta_secondary:
+    description: "Bouton d'action secondaire (découvrir, en savoir plus)"
+    target_tags: ["button", "a"]
+
+    indices:
+      - texte: "Style outline, ghost, ou bordure sans fond plein"
+        weight: 20
+
+      - texte: "Texte avec verbe d'exploration (Découvrir, Voir, En savoir plus, Explorer, Consulter...)"
+        weight: 15
+
+      - texte: "Accompagne un bouton primaire dans la même section"
+        weight: 15
+
+      - texte: "Présent dans les sections de contenu (features, services, about, pricing)"
+        weight: 10
+
+      - texte: "Taille égale ou inférieure aux autres boutons de la section"
+        weight: 10
+
+      - texte: "Couleur moins contrastée que le CTA primaire (gris, blanc, transparent)"
+        weight: 10
+
+      - texte: "Pas dans le hero principal"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  nav_click:
+    description: "Lien de navigation principale"
+    target_tags: ["a", "button"]
+
+    indices:
+      - texte: "Situé dans un <nav> ou <header>"
+        weight: 25
+
+      - texte: "Texte court (1-3 mots) sans verbe d'action fort"
+        weight: 15
+
+      - texte: "Fait partie d'une liste de liens similaires (menu horizontal ou vertical)"
+        weight: 15
+
+      - texte: "Pas de style bouton (pas de background coloré, pas de border-radius prononcé)"
+        weight: 10
+
+      - texte: "href interne (même domaine, chemin relatif, ou ancre #)"
+        weight: 10
+
+      - texte: "Texte correspondant à une section du site (Accueil, Services, Contact, À propos...)"
+        weight: 10
+
+    seuils:
+      tres_confiant: 80
+      confiant: 65
+      incertain: 45
+      faible: 0
+
+
+  form_submit:
+    description: "Formulaire de contact ou de demande"
+    target_tags: ["form"]
+
+    indices:
+      - texte: "Contient un champ email (input type=email ou name contenant 'email')"
+        weight: 20
+
+      - texte: "Contient un champ message ou textarea"
+        weight: 15
+
+      - texte: "Contient un bouton submit"
+        weight: 15
+
+      - texte: "ID ou classe contenant 'contact', 'form', 'request', 'demande'"
+        weight: 15
+
+      - texte: "Présent dans une section 'contact' ou page contact"
+        weight: 10
+
+      - texte: "Contient un champ téléphone"
+        weight: 10
+
+      - texte: "Pas un formulaire de newsletter (pas juste un email + submit)"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  newsletter_submit:
+    description: "Formulaire d'inscription newsletter"
+    target_tags: ["form"]
+
+    indices:
+      - texte: "Contient UNIQUEMENT un champ email (ou email + prénom)"
+        weight: 25
+
+      - texte: "Texte du bouton contient 'inscrire', 'subscribe', 'newsletter', 'recevoir'"
+        weight: 20
+
+      - texte: "Situé dans le footer ou une sidebar"
+        weight: 15
+
+      - texte: "ID ou classe contenant 'newsletter', 'subscribe', 'mailing'"
+        weight: 15
+
+      - texte: "Pas de champ message/textarea"
+        weight: 10
+
+      - texte: "Accompagné d'un texte mentionnant newsletter, actualités, ou emails"
+        weight: 10
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0

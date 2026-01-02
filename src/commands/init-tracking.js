@@ -1,6 +1,6 @@
 /**
  * Commande init-tracking (Étape 1)
- * Déploie le dossier tracking/ avec le template tracking-events.yaml
+ * Déploie le dossier tracking/ avec tracking-events.yaml et tracking-rules.yaml
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
@@ -55,18 +55,20 @@ export async function runInitTracking(options) {
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
-  // Vérifier si tracking-events.yaml existe déjà
-  const yamlPath = join(projectPath, outputDir, 'tracking-events.yaml');
+  // Vérifier si les fichiers existent déjà
+  const eventsPath = join(projectPath, outputDir, 'tracking-events.yaml');
+  const rulesPath = join(projectPath, outputDir, 'tracking-rules.yaml');
 
-  if (!force && existsSync(yamlPath)) {
-    console.log(chalk.yellow('⚠️  Le fichier tracking-events.yaml existe déjà :'));
-    console.log(chalk.gray(`   • ${yamlPath}`));
+  if (!force && (existsSync(eventsPath) || existsSync(rulesPath))) {
+    console.log(chalk.yellow('⚠️  Des fichiers tracking existent déjà :'));
+    if (existsSync(eventsPath)) console.log(chalk.gray(`   • ${eventsPath}`));
+    if (existsSync(rulesPath)) console.log(chalk.gray(`   • ${rulesPath}`));
     console.log();
 
     const { overwrite } = await inquirer.prompt([{
       type: 'confirm',
       name: 'overwrite',
-      message: 'Voulez-vous l\'écraser ?',
+      message: 'Voulez-vous les écraser ?',
       default: false
     }]);
 
@@ -145,20 +147,25 @@ export async function runInitTracking(options) {
   console.log(chalk.cyan('📝 Génération des fichiers...'));
 
   try {
-    // Charger tracking-events.yaml
-    let yamlContent = loadTemplate('tracking-events.yaml');
+    // 1. Charger et déployer tracking-events.yaml
+    let eventsContent = loadTemplate('tracking-events.yaml');
 
     // Remplacer les placeholders dans la section project
-    yamlContent = yamlContent
+    eventsContent = eventsContent
       .replace(/^  name: ""$/m, `  name: "${projectName}"`)
       .replace(/^  gtm_container_id: ""$/m, `  gtm_container_id: "${gtmId}"`)
       .replace(/^  ga4_measurement_id: ""$/m, `  ga4_measurement_id: "${ga4Id}"`)
       .replace(/\{\{DOMAIN\}\}/g, domain);
 
-    writeFileSync(yamlPath, yamlContent);
+    writeFileSync(eventsPath, eventsContent);
     console.log(chalk.green(`   ✓ ${outputDir}/tracking-events.yaml (56 events)`));
 
-    // Créer un fichier .gitkeep dans debug/
+    // 2. Charger et déployer tracking-rules.yaml
+    const rulesContent = loadTemplate('tracking-rules.yaml');
+    writeFileSync(rulesPath, rulesContent);
+    console.log(chalk.green(`   ✓ ${outputDir}/tracking-rules.yaml (5 rulesets)`));
+
+    // 3. Créer un fichier .gitkeep dans debug/
     const gitkeepPath = join(fullDebugDir, '.gitkeep');
     if (!existsSync(gitkeepPath)) {
       writeFileSync(gitkeepPath, '');

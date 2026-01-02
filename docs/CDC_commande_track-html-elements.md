@@ -1,19 +1,102 @@
-# Cahier des Charges : Custom Command `/track-html-elements`
+# Cahier des Charges : Custom Command Claude `/track-html-elements`
 
-## Vue d'Ensemble
+## 1. Vue d'Ensemble
 
-Custom command Claude Code pour identifier et injecter automatiquement les attributs `data-tracking-event` sur les éléments HTML en utilisant un **système de règles générique et extensible**.
+### Type
+**Custom Command Claude Code** - Fichier `.claude/commands/track-html-elements.md`
 
-**Phase 1** : Boutons (primary/secondary)  
-**Phase 2+** : Formulaires, liens, vidéos, etc.
+### Objectif
+Analyser automatiquement les fichiers HTML d'un projet, détecter les éléments trackables via un système de règles descriptives pondérées, et injecter les attributs `data-track`.
 
-***
+### Contexte d'Exécution
+Claude Code a accès à **tout le projet** :
+- Fichiers HTML (DEV, pas PROD)
+- Fichiers CSS (pour déduire les styles depuis les classes)
+- Fichiers YAML de configuration
 
-## Architecture : 2 Fichiers de Configuration
+---
 
-### Fichier 1 : tracking-config.yaml (Événements Métier)
+## 2. Architecture
 
-Définit **QUOI tracker** (événements business).
+### Fichiers Impliqués
+
+```
+projet-client/
+├── tracking/
+│   ├── tracking-events.yaml    # QUOI tracker (events avec ruleset)
+│   └── tracking-rules.yaml     # COMMENT détecter (règles descriptives)
+├── src/                        # ou public/, dist/...
+│   ├── *.html                  # Fichiers à analyser
+│   └── styles/                 # CSS pour déduire les styles
+```
+
+### Relation entre Fichiers
+
+| Fichier | Rôle | Contient |
+|---------|------|----------|
+| `tracking-events.yaml` | QUOI tracker | Liste des events avec leur `ruleset` associé |
+| `tracking-rules.yaml` | COMMENT détecter | Règles descriptives avec poids |
+
+---
+
+## 3. Format des Règles (tracking-rules.yaml)
+
+### Philosophie
+Les règles sont **descriptives et humaines**, pas techniques. Claude les interprète en analysant le HTML et le CSS du projet.
+
+### Structure d'un Ruleset
+
+```yaml
+rulesets:
+
+  primary_cta:
+    description: "Bouton d'action principal du site (CTA de conversion)"
+    target_tags: ["button", "a", "div[role=button]"]
+
+    indices:
+      - texte: "Fond de couleur primaire (pas outline, pas ghost, pas transparent)"
+        weight: 20
+
+      - texte: "Texte court avec verbe d'action fort (Commencer, Essayer, Démarrer, S'inscrire...)"
+        weight: 15
+
+      - texte: "Isolé ou visuellement mis en avant dans sa section"
+        weight: 15
+
+      - texte: "Présent dans une zone critique (hero, header, above-the-fold)"
+        weight: 15
+
+      - texte: "Contenu identique ou similaire répété sur plusieurs pages du site"
+        weight: 10
+
+      - texte: "Taille plus grande que les autres boutons de la section"
+        weight: 10
+
+      - texte: "Pas de style outline, ghost, ou link"
+        weight: 10
+
+      - texte: "A un ID ou une classe distinctive (cta, action, primary...)"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85   # ≥85% → injection automatique
+      confiant: 70        # ≥70% → injection automatique
+      incertain: 50       # ≥50% → mentionné dans le rapport, pas injecté
+      faible: 0           # <50% → ignoré
+```
+
+### Champs Obligatoires
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `description` | string | Description humaine du ruleset |
+| `target_tags` | array | Tags HTML ciblés |
+| `indices` | array | Liste de règles avec `texte` et `weight` |
+| `seuils` | object | Seuils de confiance (tres_confiant, confiant, incertain, faible) |
+
+---
+
+## 4. Format des Events (tracking-events.yaml)
 
 ```yaml
 project:
@@ -22,1086 +105,692 @@ project:
   ga4_measurement_id: "G-XXXXXXXXXX"
 
 events:
-  - event_name: "button_primary_click"
-    description: "Bouton d'action principal (CTA primaire)"
-    priority: 1
-    ruleset: "primary_button"
-    
-  - event_name: "button_secondary_click"
-    description: "Bouton d'action secondaire"
-    priority: 2
-    ruleset: "secondary_button"
+  - event_name: "cta_primary"
+    description: "Clic sur le CTA principal"
+    category: "engagement"
+    trigger: "click"
+    selector: "[data-track='cta-primary']"
+    ruleset: "primary_cta"              # Lien vers tracking-rules.yaml
+
+  - event_name: "cta_secondary"
+    description: "Clic sur un CTA secondaire"
+    category: "engagement"
+    trigger: "click"
+    selector: "[data-track='cta-secondary']"
+    ruleset: "secondary_cta"
 ```
 
-### Fichier 2 : tracking-rules.yaml (Règles de Détection)
+**Note** : Seuls les events avec `ruleset` sont traités par `/track-html-elements`.
 
-Définit **COMMENT détecter** les éléments à tracker.
+---
 
-```yaml
-rulesets:
-  primary_button:
-    target_tags: ["button", "a", "div"]
-    
-    visual_rules:
-      - rule: "text_contains_action_verb_strong"
-        patterns: ["commencer", "démarrer", "essayer", "lancer", "start", "try"]
-        weight: 15
-        
-      - rule: "in_critical_section"
-        patterns: ["hero", "header", "main-cta", "banner"]
-        weight: 15
-        
-      - rule: "is_isolated_button"
-        description: "Seul bouton dans sa section"
-        weight: 10
-        
-    html_rules:
-      - rule: "has_class_pattern"
-        patterns: ["btn-primary", "button-primary", "cta-primary", "primary"]
-        weight: 15
-        
-      - rule: "has_class_prefix"
-        patterns: ["btn-", "button-", "cta-"]
-        weight: 10
-        
-      - rule: "has_id_pattern"
-        patterns: ["btn-cta", "cta-", "action-", "primary-btn"]
-        weight: 10
-        
-      - rule: "has_role_button"
-        patterns: ["button"]
-        weight: 5
-        
-      - rule: "no_outline_style"
-        description: "Pas de style outline ou ghost"
-        patterns: ["outline", "ghost", "link"]
-        inverse: true
-        weight: 10
-        
-    combined_rules:
-      - condition: "in_hero_section AND has_action_verb"
-        bonus_weight: 10
-        
-    confidence_thresholds:
-      very_high: 90    # ≥90% des règles matchées
-      high: 70         # ≥70%
-      medium: 50       # ≥50%
-      low: 30          # <50%
-      
-  secondary_button:
-    target_tags: ["button", "a", "div"]
-    
-    visual_rules:
-      - rule: "text_contains_action_verb_medium"
-        patterns: ["découvrir", "explorer", "voir", "consulter", "learn more"]
-        weight: 15
-        
-      - rule: "in_secondary_section"
-        patterns: ["features", "services", "about", "footer"]
-        weight: 10
-        
-      - rule: "has_sibling_buttons"
-        description: "Présence d'autres boutons dans la section"
-        weight: 10
-        
-    html_rules:
-      - rule: "has_class_pattern"
-        patterns: ["btn-secondary", "button-secondary", "outline", "ghost", "link-btn"]
-        weight: 15
-        
-      - rule: "has_class_prefix"
-        patterns: ["btn-", "button-"]
-        weight: 10
-        
-      - rule: "has_outline_style"
-        description: "Style outline ou ghost"
-        patterns: ["outline", "ghost", "bordered"]
-        inverse: false
-        weight: 15
-        
-    confidence_thresholds:
-      very_high: 90
-      high: 70
-      medium: 50
-      low: 30
-```
+## 5. Syntaxe de la Commande
 
-***
-
-## Prérequis Obligatoires
-
-### 1. Fichiers de Configuration
-
-**tracking-config.yaml** :
-- Section `events:` avec au moins 1 événement
-- Chaque événement a : `event_name`, `description`, `priority`, `ruleset`
-
-**tracking-rules.yaml** :
-- Section `rulesets:` avec rulesets référencés
-- Chaque ruleset a : `target_tags`, `visual_rules`, `html_rules`, `confidence_thresholds`
-
-### 2. Dossier HTML
-
-L'utilisateur DOIT fournir le chemin :
 ```bash
-/track-html-elements --dir ./public
+/track-html-elements --dir ./src [--threshold confiant] [--dry-run] [--file <path>]
 ```
 
-### 3. Structure HTML Recommandée
+### Options
 
-Sections avec ID pour améliorer la détection de contexte :
-```html
-<section id="hero">
-  <button>Commencer</button>
-</section>
-```
+| Option | Description | Défaut |
+|--------|-------------|--------|
+| `--dir <path>` | Dossier HTML à analyser | **obligatoire** |
+| `--threshold` | `tres_confiant`, `confiant`, `incertain` | `confiant` |
+| `--dry-run` | Simulation sans modification | `false` |
+| `--file <path>` | Traiter un seul fichier | - |
 
-***
+---
 
-## Workflow Principal - Mode 100% Automatique
+## 6. Workflow d'Exécution
 
-### PHASE 1 : Initialisation
-
-#### 1.1 Charger les Configurations
+### Étape 1 : Validation
 
 ```
-📊 Chargement des configurations...
-
-✓ tracking-config.yaml chargé
-  → 2 événements définis
-  
-✓ tracking-rules.yaml chargé
-  → 2 rulesets chargés (primary_button, secondary_button)
-  
-✓ Dossier HTML : ./public
-  → 8 fichiers .html détectés
+1. Lire tracking-events.yaml
+2. Lire tracking-rules.yaml
+3. Valider cohérence (rulesets référencés existent)
+4. Scanner fichiers HTML dans --dir
 ```
 
-#### 1.2 Valider la Cohérence
+**Erreurs bloquantes** :
+- YAML manquant → STOP + proposer création template
+- Ruleset référencé inexistant → STOP + lister rulesets disponibles
+- Dossier HTML vide → STOP + message
+
+### Étape 2 : Analyse CSS
 
 ```
-✓ Validation de la cohérence...
-  → Ruleset "primary_button" référencé dans events ✓
-  → Ruleset "secondary_button" référencé dans events ✓
-  → Tous les rulesets ont des seuils de confiance ✓
+1. Identifier les fichiers CSS du projet (*.css, y compris dans node_modules si Tailwind)
+2. Mapper les classes aux styles (couleurs, borders, backgrounds...)
+3. Créer un index des styles pour référence
 ```
 
-#### 1.3 Afficher le Plan d'Exécution
+**Objectif** : Pouvoir déduire qu'un élément avec `class="bg-blue-600"` a un fond bleu.
 
-```markdown
-📋 Plan d'exécution
+**Si CSS introuvable** : WARNING + continuer sans styles déduits.
 
-**Événements à détecter** :
-1. button_primary_click (priorité 1) → ruleset: primary_button
-2. button_secondary_click (priorité 2) → ruleset: secondary_button
+### Étape 3 : Analyse Cross-Fichiers
 
-**Fichiers à traiter** : 8
-- index.html
-- about.html
-- contact.html
-[...]
-
-**Mode** : Automatique (injection si confiance ≥ 70%)
-
-Démarrer ? [O/n] ← Seule interaction possible
+```
+1. Scanner TOUS les fichiers HTML du dossier
+2. Identifier les éléments récurrents (même texte, mêmes classes)
+3. Noter la fréquence d'apparition par élément
 ```
 
-***
+**Objectif** : Détecter qu'un bouton "Commencer maintenant" apparaît sur 5+ pages.
 
-### PHASE 2 : Extraction et Analyse
+### Étape 4 : Extraction des Éléments
 
-#### 2.1 Scanner les Éléments HTML
+Pour chaque fichier HTML :
 
-Pour **chaque fichier HTML** :
-
-1. **Parser le HTML** (cheerio, jsdom)
-2. **Extraire tous les éléments potentiels**
-
-```javascript
-// Pseudo-code
-const potentialElements = []
-
-for (const ruleset of rulesets) {
-  const { target_tags } = ruleset
-  
-  // Ex: target_tags = ["button", "a", "div"]
-  const elements = $(target_tags.join(',')).toArray()
-  
-  potentialElements.push(...elements)
-}
-
-// Résultat : Tous les <button>, <a>, <div> du fichier
+```
+1. Parser le HTML
+2. Extraire éléments selon target_tags de chaque ruleset
+3. Collecter métadonnées enrichies (incluant styles déduits)
 ```
 
-#### 2.2 Extraire les Métadonnées
+### Étape 5 : Scoring
 
-Pour chaque élément détecté :
+Pour chaque élément × chaque ruleset :
+
+```
+1. Évaluer chaque indice (Claude interprète le texte descriptif)
+2. Calculer score = Σ(poids des indices matchés) / Σ(poids total) × 100
+3. Déterminer niveau de confiance selon seuils
+```
+
+### Étape 6 : Résolution des Conflits
+
+```
+Si un élément matche plusieurs events ≥ seuil :
+→ Choisir celui avec le meilleur score
+→ En cas d'égalité : ordre alphabétique + warning
+```
+
+### Étape 7 : Injection
+
+```
+1. Créer backup timestampé (sauf --dry-run)
+2. Injecter data-track="valeur"
+3. Préserver indentation exacte
+```
+
+### Étape 8 : Rapport
+
+Afficher le rapport concis (voir section 9).
+
+---
+
+## 7. Comment Claude Évalue les Indices
+
+Claude interprète chaque indice en langage naturel. Exemples :
+
+### Indice : "Fond de couleur primaire"
+
+```
+1. Lire les classes CSS de l'élément : class="btn bg-blue-600 text-white"
+2. Chercher dans le CSS du projet ce que fait .bg-blue-600
+3. Si c'est une couleur vive (pas gray, pas transparent) → MATCH
+4. Bonus si c'est la même couleur que d'autres CTAs du site
+```
+
+### Indice : "Isolé ou visuellement mis en avant"
+
+```
+1. Compter les autres boutons dans la même <section>
+2. Si seul bouton → MATCH fort
+3. Si accompagné mais plus grand/coloré → MATCH moyen
+4. Si perdu parmi plusieurs boutons similaires → PAS DE MATCH
+```
+
+### Indice : "Contenu répété sur plusieurs pages"
+
+```
+1. Utiliser l'analyse cross-fichiers (étape 3)
+2. Si un bouton "Commencer maintenant" apparaît sur 5+ pages → MATCH
+3. Si unique à cette page → PAS DE MATCH
+```
+
+---
+
+## 8. Métadonnées Extraites par Élément
 
 ```javascript
 {
   // Identification
-  tag: "button",
-  html: "<button id='btn-cta' class='btn-primary'>Commencer</button>",
-  line: 23,
   file: "index.html",
-  
+  line: 23,
+  tag: "button",
+  html: "<button class='btn bg-blue-600'>Commencer</button>",
+
   // Contenu
-  text: "Commencer maintenant",
-  textLower: "commencer maintenant",
-  textWords: ["commencer", "maintenant"],
-  
+  text: "Commencer",
+  textLower: "commencer",
+
   // Attributs
   id: "btn-cta",
-  classes: ["btn-primary", "large"],
-  role: null,
-  href: null,  // si <a>
-  type: null,  // si <button>
-  
-  // Styles (inline ou computés si possible)
-  inlineStyles: {},
-  
+  classes: ["btn", "bg-blue-600", "text-white", "px-6", "py-3"],
+
+  // Styles déduits (depuis CSS)
+  styles: {
+    backgroundColor: "#2563eb",  // déduit de bg-blue-600
+    color: "#ffffff",
+    border: "none",
+    isOutline: false,
+    isGhost: false
+  },
+
   // Contexte
-  section: "hero",  // ID de <section> parente
-  sectionTag: "section",
-  depth: 3,  // Profondeur dans l'arbre DOM
-  
-  // Voisins
-  siblingButtons: 0,  // Autres boutons potentiels dans même section
-  siblingButtonsData: [],
-  
-  // État
-  hasTrackingAttr: false,
-  existingEvent: null
+  section: "hero",
+  parentNav: false,
+  siblingButtons: 0,
+
+  // Récurrence (cross-fichiers)
+  occurrences: 5,  // Trouvé sur 5 pages
+  occurrenceFiles: ["index.html", "about.html", "pricing.html", ...]
 }
 ```
 
-***
+---
 
-### PHASE 3 : Application du Système de Règles
+## 9. Format du Rapport (Concis)
 
-#### 3.1 Pour Chaque Élément, Tester Tous les Rulesets
+```
+📊 /track-html-elements
+─────────────────────────
 
-```javascript
-// Pseudo-code
-for (const element of elements) {
-  const scores = {}
-  
-  for (const [eventName, event] of events) {
-    const ruleset = rulesets[event.ruleset]
-    const score = evaluateRuleset(element, ruleset)
-    
-    scores[eventName] = {
-      score: score,
-      percentage: score.matched / score.total * 100,
-      confidence: determineConfidence(score.percentage, ruleset.confidence_thresholds)
-    }
-  }
-  
-  element.scores = scores
-}
+✓ 2 events avec ruleset
+✓ 2 rulesets chargés
+✓ 8 fichiers HTML analysés
+✓ 3 fichiers CSS indexés
+
+Seuil : confiant (≥70%)
+
+─────────────────────────
+
+✅ 12 attributs injectés
+
+  index.html
+    L.23  cta_primary     92%  <button>Commencer maintenant</button>
+    L.67  cta_secondary   74%  <a>Découvrir les fonctionnalités</a>
+
+  about.html
+    L.45  cta_primary     88%  <button>Commencer maintenant</button>
+
+  [...]
+
+─────────────────────────
+
+⚠️ 5 éléments incertains (50-69%)
+
+  index.html:89   58%  <button>En savoir plus</button>
+  services.html:34  52%  <a>Voir les détails</a>
+  [...]
+
+─────────────────────────
+
+Backups : ./tracking/backups/20260101-120000/
 ```
 
-#### 3.2 Évaluer un Ruleset
+---
 
-**Étapes** :
+## 10. Règles Strictes
 
-1. **Vérifier target_tags**
-   - Si `element.tag` n'est pas dans `target_tags` → score = 0, SKIP
+### Un Élément = Un Seul Event
+Jamais plusieurs `data-track` sur le même élément.
 
-2. **Évaluer visual_rules**
-3. **Évaluer html_rules**
-4. **Évaluer combined_rules**
-5. **Calculer le pourcentage**
+### Préservation HTML
+- Garder l'indentation exacte
+- Placer l'attribut après `class`
+- Ne pas reformater
 
-***
+### Backup Obligatoire
+Créer backup avant modification (sauf `--dry-run`).
 
-### PHASE 3.3 : Détail des Types de Règles
+### Éléments Déjà Trackés
+Si `data-track` existe déjà → ignorer et mentionner.
 
-#### Type 1 : Visual Rules (Règles Sémantiques/CSS)
+---
 
-##### Règle : text_contains_action_verb
+## 11. Gestion des Erreurs
+
+| Erreur | Action |
+|--------|--------|
+| YAML manquant | STOP + proposer création template |
+| Ruleset référencé inexistant | STOP + lister rulesets disponibles |
+| Dossier HTML vide | STOP + message |
+| CSS introuvable | WARNING + continuer sans styles déduits |
+| Conflit de scores égaux | Prendre le premier par ordre alphabétique + warning |
+
+---
+
+## 12. Exemple Complet d'Évaluation
+
+### Élément HTML
+
+```html
+<!-- index.html, ligne 23 -->
+<section id="hero">
+  <button class="btn bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-bold">
+    Commencer maintenant
+  </button>
+</section>
+```
+
+### Ruleset : primary_cta
+
+| Indice | Évaluation | Match | Poids |
+|--------|------------|-------|-------|
+| Fond de couleur primaire | `bg-blue-600` = bleu vif | ✓ | 20 |
+| Verbe d'action fort | "Commencer" | ✓ | 15 |
+| Isolé dans sa section | Seul bouton dans #hero | ✓ | 15 |
+| Zone critique | Section "hero" | ✓ | 15 |
+| Répété sur le site | Trouvé sur 6 pages | ✓ | 10 |
+| Plus grand | `text-lg px-8 py-4` | ✓ | 10 |
+| Pas de style outline | Pas de border, fond plein | ✓ | 10 |
+| ID/classe distinctive | class contient "btn" | ✓ | 5 |
+
+**Score** : 100/100 = **100%** → `tres_confiant`
+
+**Action** : Injecter `data-track="cta-primary"`
+
+---
+
+## 13. Mode Dry-Run
+
+Avec `--dry-run` :
+- ✅ Analyse complète
+- ✅ Rapport généré
+- ❌ Pas de backup
+- ❌ Pas de modification
+
+Message final :
+```
+🔍 MODE SIMULATION (--dry-run)
+
+Aucun fichier n'a été modifié.
+
+Pour appliquer : /track-html-elements --dir ./src
+```
+
+---
+
+## 14. Ce qui est EXCLU
+
+| Exclu | Raison |
+|-------|--------|
+| `combined_rules` | Complexité inutile, les indices suffisent |
+| Rapport détaillé par règle | Trop verbeux |
+| Mode interactif | Soit 100% auto, soit `/html-layer` manuel |
+| Export Markdown | Le rapport console suffit |
+| Priorités d'events | Le meilleur score gagne |
+
+---
+
+## 15. Prérequis de Validation
+
+Avant de commencer, Claude DOIT vérifier :
+
+### tracking-events.yaml
+- ✓ Le fichier existe
+- ✓ Section `events:` présente avec au moins 1 événement
+- ✓ Chaque événement a : `event_name`, `description`, `ruleset`
+- ✓ Les `event_name` sont en snake_case et uniques
+
+### tracking-rules.yaml
+- ✓ Le fichier existe
+- ✓ Section `rulesets:` présente
+- ✓ Tous les rulesets référencés dans `tracking-events.yaml` existent
+- ✓ Chaque ruleset a : `target_tags`, `indices`, `seuils`
+
+### Dossier HTML
+- ✓ Le dossier `--dir` existe
+- ✓ Contient au moins 1 fichier `.html`
+
+---
+
+## 16. Templates de Création
+
+Si YAML manquant, proposer ces templates :
+
+### tracking-events.yaml
 
 ```yaml
-- rule: "text_contains_action_verb_strong"
-  patterns: ["commencer", "démarrer", "essayer", "start"]
-  weight: 15
-```
+project:
+  name: "mon-projet"
 
-**Évaluation** :
-```javascript
-function evaluateTextContains(element, rule) {
-  const { patterns, weight } = rule
-  const text = element.textLower
-  
-  for (const pattern of patterns) {
-    if (text.includes(pattern)) {
-      return { matched: true, weight: weight }
-    }
-  }
-  
-  return { matched: false, weight: 0 }
-}
-```
-
-##### Règle : in_critical_section
-
-```yaml
-- rule: "in_critical_section"
-  patterns: ["hero", "header", "main-cta"]
-  weight: 15
-```
-
-**Évaluation** :
-```javascript
-function evaluateInSection(element, rule) {
-  const { patterns, weight } = rule
-  const section = element.section  // "hero"
-  
-  if (patterns.includes(section)) {
-    return { matched: true, weight: weight }
-  }
-  
-  return { matched: false, weight: 0 }
-}
-```
-
-##### Règle : is_isolated_button
-
-```yaml
-- rule: "is_isolated_button"
-  description: "Seul bouton dans sa section"
-  weight: 10
-```
-
-**Évaluation** :
-```javascript
-function evaluateIsIsolated(element, rule) {
-  const { weight } = rule
-  
-  if (element.siblingButtons === 0) {
-    return { matched: true, weight: weight }
-  }
-  
-  return { matched: false, weight: 0 }
-}
-```
-
-***
-
-#### Type 2 : HTML Rules (Règles Techniques)
-
-##### Règle : has_class_pattern
-
-```yaml
-- rule: "has_class_pattern"
-  patterns: ["btn-primary", "button-primary", "cta-primary"]
-  weight: 15
-```
-
-**Évaluation** :
-```javascript
-function evaluateClassPattern(element, rule) {
-  const { patterns, weight } = rule
-  const classes = element.classes  // ["btn-primary", "large"]
-  
-  for (const pattern of patterns) {
-    if (classes.includes(pattern)) {
-      return { matched: true, weight: weight }
-    }
-  }
-  
-  return { matched: false, weight: 0 }
-}
-```
-
-##### Règle : has_class_prefix
-
-```yaml
-- rule: "has_class_prefix"
-  patterns: ["btn-", "button-", "cta-"]
-  weight: 10
-```
-
-**Évaluation** :
-```javascript
-function evaluateClassPrefix(element, rule) {
-  const { patterns, weight } = rule
-  const classes = element.classes.join(' ')
-  
-  for (const pattern of patterns) {
-    const regex = new RegExp(`\\b${pattern}\\w+`, 'i')
-    if (regex.test(classes)) {
-      return { matched: true, weight: weight }
-    }
-  }
-  
-  return { matched: false, weight: 0 }
-}
-
-// Exemple : classes = "btn-primary large"
-// Pattern "btn-" → Match "btn-primary" ✓
-```
-
-##### Règle : Inverse Match (no_outline_style)
-
-```yaml
-- rule: "no_outline_style"
-  patterns: ["outline", "ghost", "link"]
-  inverse: true  # ← Match si AUCUN pattern trouvé
-  weight: 10
-```
-
-**Évaluation** :
-```javascript
-function evaluateInverse(element, rule) {
-  const { patterns, weight, inverse } = rule
-  const classes = element.classes.join(' ')
-  
-  let found = false
-  for (const pattern of patterns) {
-    if (classes.includes(pattern)) {
-      found = true
-      break
-    }
-  }
-  
-  if (inverse) {
-    // Inverse : on veut que ce soit NOT found
-    if (!found) {
-      return { matched: true, weight: weight }
-    }
-  } else {
-    if (found) {
-      return { matched: true, weight: weight }
-    }
-  }
-  
-  return { matched: false, weight: 0 }
-}
-```
-
-***
-
-#### Type 3 : Combined Rules (Règles Combinatoires)
-
-```yaml
-combined_rules:
-  - condition: "in_hero_section AND has_action_verb"
-    bonus_weight: 10
-```
-
-**Évaluation** :
-```javascript
-function evaluateCombinedRules(element, combinedRules, visualResults, htmlResults) {
-  let bonusWeight = 0
-  
-  for (const rule of combinedRules) {
-    const { condition, bonus_weight } = rule
-    
-    // Parser la condition
-    // Exemple : "in_hero_section AND has_action_verb"
-    const conditions = parseCondition(condition)
-    
-    // Vérifier si toutes les sous-conditions sont vraies
-    let allMatch = true
-    for (const cond of conditions) {
-      if (!isConditionMet(cond, element, visualResults, htmlResults)) {
-        allMatch = false
-        break
-      }
-    }
-    
-    if (allMatch) {
-      bonusWeight += bonus_weight
-    }
-  }
-  
-  return bonusWeight
-}
-
-function parseCondition(condition) {
-  // "in_hero_section AND has_action_verb"
-  // → ["in_hero_section", "has_action_verb"]
-  return condition.split(' AND ').map(c => c.trim())
-}
-
-function isConditionMet(conditionName, element, visualResults, htmlResults) {
-  // Vérifier si une règle avec ce nom a matché
-  const allResults = [...visualResults, ...htmlResults]
-  
-  for (const result of allResults) {
-    if (result.ruleName.includes(conditionName) && result.matched) {
-      return true
-    }
-  }
-  
-  return false
-}
-```
-
-***
-
-### PHASE 3.4 : Calcul du Score Final (Système Booléen)
-
-**Formule** : Pourcentage de règles qui ont matché
-
-```javascript
-function calculateScore(element, ruleset) {
-  const allRules = [
-    ...ruleset.visual_rules,
-    ...ruleset.html_rules
-  ]
-  
-  let totalWeight = 0
-  let matchedWeight = 0
-  
-  // Évaluer toutes les règles
-  for (const rule of allRules) {
-    totalWeight += rule.weight
-    
-    const result = evaluateRule(element, rule)
-    if (result.matched) {
-      matchedWeight += rule.weight
-    }
-  }
-  
-  // Bonus des combined_rules
-  const bonus = evaluateCombinedRules(element, ruleset.combined_rules, ...)
-  matchedWeight += bonus
-  totalWeight += bonus  // Le bonus augmente aussi le total possible
-  
-  // Pourcentage
-  const percentage = (matchedWeight / totalWeight) * 100
-  
-  // Déterminer niveau de confiance
-  const confidence = determineConfidence(percentage, ruleset.confidence_thresholds)
-  
-  return {
-    matched: matchedWeight,
-    total: totalWeight,
-    percentage: percentage,
-    confidence: confidence
-  }
-}
-
-function determineConfidence(percentage, thresholds) {
-  if (percentage >= thresholds.very_high) return 'very_high'
-  if (percentage >= thresholds.high) return 'high'
-  if (percentage >= thresholds.medium) return 'medium'
-  return 'low'
-}
-```
-
-**Exemple concret** :
-
-```javascript
-// Élément : <button class="btn-primary">Commencer</button> dans <section id="hero">
-
-// Ruleset : primary_button
-// Total possible : 100 points (somme de tous les weights)
-
-// Règles matchées :
-✓ text_contains_action_verb_strong : +15 (match "commencer")
-✓ in_critical_section : +15 (section = "hero")
-✓ is_isolated_button : +10 (siblingButtons = 0)
-✓ has_class_pattern : +15 (class = "btn-primary")
-✓ has_class_prefix : +10 (class commence par "btn-")
-✗ has_id_pattern : 0 (pas d'id)
-✓ has_role_button : +5 (tag = "button" a role implicite)
-✓ no_outline_style : +10 (pas de classe "outline")
-✓ BONUS combined_rule : +10 (in_hero AND action_verb)
-
-// Score = 90 / 100 = 90%
-// Confidence = very_high (≥90%)
-```
-
-***
-
-### PHASE 4 : Résolution des Conflits (Ambiguïté)
-
-#### Cas 1 : Un Élément, Plusieurs Événements avec Score Élevé
-
-```javascript
-// Exemple :
-// <button>Télécharger le guide</button>
-
-scores = {
-  button_primary_click: { percentage: 75, confidence: 'high' },
-  button_download: { percentage: 75, confidence: 'high' }
-}
-```
-
-**Règle** : Utiliser la **priorité** définie dans `tracking-config.yaml`.
-
-```yaml
 events:
-  - event_name: "button_primary_click"
-    priority: 1  # ← Plus petit = plus prioritaire
-    
-  - event_name: "button_download"
-    priority: 2
+  - event_name: "cta_primary"
+    description: "Clic sur le CTA principal"
+    category: "engagement"
+    trigger: "click"
+    selector: "[data-track='cta-primary']"
+    ruleset: "primary_cta"
+
+  - event_name: "cta_secondary"
+    description: "Clic sur un CTA secondaire"
+    category: "engagement"
+    trigger: "click"
+    selector: "[data-track='cta-secondary']"
+    ruleset: "secondary_cta"
 ```
 
-**Résolution** :
-```javascript
-function resolveConflict(scores, events) {
-  // Filtrer les événements avec confiance ≥ high
-  const candidates = Object.entries(scores)
-    .filter(([name, score]) => score.confidence === 'high' || score.confidence === 'very_high')
-  
-  if (candidates.length === 0) {
-    return null  // Aucun candidat
-  }
-  
-  if (candidates.length === 1) {
-    return candidates[0][0]  // Un seul candidat
-  }
-  
-  // Plusieurs candidats : trier par priorité
-  candidates.sort((a, b) => {
-    const eventA = events.find(e => e.event_name === a[0])
-    const eventB = events.find(e => e.event_name === b[0])
-    return eventA.priority - eventB.priority  // Ascendant
-  })
-  
-  // Retourner le plus prioritaire
-  return candidates[0][0]
-}
-```
-
-#### Cas 2 : Égalité Parfaite de Score ET Priorité
-
-**Rare mais possible**.
-
-**Action** : Logger un warning et choisir le premier par ordre alphabétique.
-
-```javascript
-⚠️ Ambiguïté non résolue : button_primary_click vs button_secondary_click
-   Élément : <button>Action</button> (ligne 45, index.html)
-   Score identique : 75%
-   Priorité identique : 1
-   → Choix par défaut : button_primary_click (ordre alphabétique)
-```
-
-***
-
-### PHASE 5 : Injection Automatique
-
-#### 5.1 Filtrer par Seuil de Confiance
-
-**Seuil par défaut** : `high` (≥70%)
-
-```javascript
-const elementsToInject = elements.filter(element => {
-  const bestEvent = resolveBestEvent(element, scores, events)
-  if (!bestEvent) return false
-  
-  const score = element.scores[bestEvent]
-  return score.confidence === 'high' || score.confidence === 'very_high'
-})
-```
-
-**Option CLI** : Ajuster le seuil
-```bash
-/track-html-elements --dir ./public --threshold medium  # ≥50%
-/track-html-elements --dir ./public --threshold very_high  # ≥90%
-```
-
-#### 5.2 Injecter les Attributs
-
-Pour chaque élément validé :
-
-```javascript
-// Avant
-<button id="btn-cta" class="btn-primary">Commencer</button>
-
-// Après
-<button id="btn-cta" class="btn-primary" data-tracking-event="button_primary_click">Commencer</button>
-```
-
-**Règles d'injection** :
-1. Placer après les attributs `id` et `class`
-2. Préserver l'indentation exacte
-3. Un seul événement par élément
-4. Ne pas modifier les autres attributs
-
-#### 5.3 Créer les Backups
-
-Avant toute modification :
-```
-index.html → index.html.backup-20250101-203000
-```
-
-#### 5.4 Logger les Modifications
-
-```javascript
-✅ index.html modifié
-
-Ligne 23 : button_primary_click (95% ⭐⭐⭐⭐⭐)
-  <button id="btn-cta" class="btn-primary">
-
-Ligne 67 : button_secondary_click (72% ⭐⭐⭐⭐)
-  <button class="btn-outline">
-```
-
-***
-
-### PHASE 6 : Rapport Final Visuel
-
-```markdown
-# 📊 Rapport d'Exécution : /track-html-elements
-
-**Date** : 2025-12-31 20:30:15
-**Mode** : Automatique (seuil: high ≥70%)
-**Dossier** : ./public
-
----
-
-## Résumé Global
-
-📁 **Fichiers traités** : 8
-🎯 **Éléments analysés** : 47
-✅ **Attributs injectés** : 12
-⚠️ **Éléments ignorés** : 35 (confiance < 70%)
-
----
-
-## Détail par Fichier
-
-### 📄 index.html
-
-**Éléments analysés** : 8
-**Attributs injectés** : 3
-
-#### ✅ Haute Confiance (3)
-
-```
-Ligne 23 │ ⭐⭐⭐⭐⭐ 95% │ button_primary_click
-         │ <button id="btn-cta" class="btn-primary">Commencer</button>
-         │
-         │ Règles matchées : 9/10
-         │ ✓ Verbe fort "commencer"
-         │ ✓ Section hero
-         │ ✓ Isolé
-         │ ✓ Classe "btn-primary"
-         │ ✓ Préfixe "btn-"
-         │ ✗ Pas d'ID pattern
-         │ ✓ Role button implicite
-         │ ✓ Pas de style outline
-         │ ✓ BONUS hero + verb
-```
-
-```
-Ligne 67 │ ⭐⭐⭐⭐ 72% │ button_secondary_click
-         │ <a class="btn-outline">Découvrir</a>
-         │
-         │ Règles matchées : 6/10
-         │ ✓ Verbe moyen "découvrir"
-         │ ✓ Section features
-         │ ✓ Classe "btn-outline"
-         │ ✓ Préfixe "btn-"
-         │ ✓ Style outline
-         │ ~ Autres boutons présents
-```
-
-#### ⚠️ Confiance Insuffisante (5)
-
-```
-Ligne 89 │ ⭐⭐⭐ 55% │ IGNORÉ (< 70%)
-         │ <button>En savoir plus</button>
-         │ Raison : Verbe faible, contexte ambigu
-```
-
-[Autres éléments ignorés...]
-
----
-
-### 📄 about.html
-
-**Éléments analysés** : 6
-**Attributs injectés** : 1
-
-[...]
-
----
-
-## Statistiques par Événement
-
-| Événement | Occurrences | Confiance Moyenne | Fichiers |
-|-----------|-------------|-------------------|----------|
-| button_primary_click | 5 | 88% ⭐⭐⭐⭐⭐ | index, about, services |
-| button_secondary_click | 7 | 74% ⭐⭐⭐⭐ | index, about, contact |
-
----
-
-## Distribution des Scores
-
-```
-⭐⭐⭐⭐⭐ (90-100%) ████████████████████ 8 éléments
-⭐⭐⭐⭐   (70-89%)  ██████████ 4 éléments
-⭐⭐⭐     (50-69%)  ████████████████████████ 12 éléments (ignorés)
-⭐⭐       (30-49%)  ████████████ 6 éléments (ignorés)
-⭐         (0-29%)   ██████████████████ 9 éléments (ignorés)
-```
-
----
-
-## 🚀 Prochaines Étapes
-
-1. ✅ Générer tracking.js
-   ```
-   node scripts/generate-tracking-js.js
-   ```
-
-2. ✅ Synchroniser GTM
-   ```
-   node scripts/gtm-sync.js
-   ```
-
-3. ✅ Valider configuration
-   ```
-   node scripts/validate-tracking.js
-   ```
-
----
-
-## 💡 Recommandations
-
-### Éléments à Réviser Manuellement
-
-**35 éléments ignorés** (confiance < 70%) pourraient nécessiter une révision :
-
-- **12 éléments avec score 50-69%** : Ambiguïté modérée
-  → Affiner les règles dans tracking-rules.yaml
-  → Ou ajouter des classes CSS explicites dans le HTML
-
-- **Boutons "En savoir plus" répétés** : 8 occurrences détectées
-  → Créer un événement dédié `button_learn_more` ?
-
-### Amélioration des Règles
-
-**Règles peu utilisées** :
-- `has_id_pattern` : Matché dans seulement 2/47 éléments
-  → Ajouter plus de patterns ou réduire le poids
-
-**Faux négatifs potentiels** :
-- 3 boutons dans footer avec score 65%
-  → Ajouter règle spécifique pour footer ?
-
----
-
-📝 **Logs complets** : ./logs/track-html-elements-20250101-203000.log
-💾 **Backups** : ./backups/
-```
-
-***
-
-## Syntaxe de la Commande
-
-### Usage de Base
-
-```bash
-/track-html-elements --dir <path>
-```
-
-### Options Complètes
-
-```bash
-/track-html-elements \
-  --dir ./public \                    # Dossier HTML (obligatoire)
-  --config ./tracking-config.yaml \   # Chemin config (défaut: ./tracking-config.yaml)
-  --rules ./tracking-rules.yaml \     # Chemin règles (défaut: ./tracking-rules.yaml)
-  --threshold [very_high|high|medium|low] \  # Seuil confiance (défaut: high)
-  --dry-run \                         # Simulation sans modification
-  --file <path> \                     # Traiter un seul fichier
-  --export <path> \                   # Exporter rapport Markdown
-  --no-backup \                       # Désactiver backups (déconseillé)
-  --verbose                           # Logs détaillés
-```
-
-### Exemples
-
-```bash
-# Standard : injection automatique (confiance ≥ high)
-/track-html-elements --dir ./public
-
-# Seuil très élevé : seulement confiance ≥90%
-/track-html-elements --dir ./public --threshold very_high
-
-# Seuil bas : accepter confiance ≥50%
-/track-html-elements --dir ./public --threshold medium
-
-# Simulation (voir le rapport sans modifier)
-/track-html-elements --dir ./public --dry-run
-
-# Un seul fichier
-/track-html-elements --file ./index.html
-
-# Export rapport
-/track-html-elements --dir ./public --export ./rapport.md
-```
-
-***
-
-## Extensibilité : Phase 2+ (Formulaires, Liens, etc.)
-
-### Ajouter un Nouveau Type d'Élément
-
-#### Étape 1 : Ajouter l'événement dans tracking-config.yaml
-
-```yaml
-events:
-  - event_name: "form_submit"
-    description: "Soumission d'un formulaire"
-    priority: 1
-    ruleset: "contact_form"
-```
-
-#### Étape 2 : Créer le ruleset dans tracking-rules.yaml
+### tracking-rules.yaml
 
 ```yaml
 rulesets:
-  contact_form:
-    target_tags: ["form"]
-    
-    html_rules:
-      - rule: "has_id_pattern"
-        patterns: ["form-contact", "contact-form", "form-quote"]
+
+  primary_cta:
+    description: "Bouton d'action principal du site"
+    target_tags: ["button", "a", "div[role=button]"]
+
+    indices:
+      - texte: "Fond de couleur primaire (pas outline, pas ghost)"
         weight: 20
-        
-      - rule: "contains_email_input"
-        description: "Contient un champ email"
-        weight: 20
-        
-      - rule: "contains_submit_button"
-        description: "Contient un bouton submit"
-        weight: 20
-        
-      - rule: "in_contact_section"
-        patterns: ["contact", "quote", "booking"]
+      - texte: "Texte court avec verbe d'action fort (Commencer, Essayer...)"
         weight: 15
-        
-    combined_rules:
-      - condition: "has_email_input AND has_submit_button"
-        bonus_weight: 25
-        
-    confidence_thresholds:
-      very_high: 90
-      high: 70
-      medium: 50
-      low: 30
+      - texte: "Isolé ou mis en avant dans sa section"
+        weight: 15
+      - texte: "Présent dans une zone critique (hero, header)"
+        weight: 15
+      - texte: "Répété sur plusieurs pages du site"
+        weight: 10
+      - texte: "Taille plus grande que les autres boutons"
+        weight: 10
+      - texte: "Pas de style outline ou ghost"
+        weight: 10
+      - texte: "ID ou classe distinctive (cta, primary...)"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+  secondary_cta:
+    description: "Bouton d'action secondaire"
+    target_tags: ["button", "a"]
+
+    indices:
+      - texte: "Style outline, ghost, ou bordure sans fond plein"
+        weight: 20
+      - texte: "Texte avec verbe d'exploration (Découvrir, Voir, En savoir plus...)"
+        weight: 15
+      - texte: "Accompagne un bouton primaire dans la même section"
+        weight: 15
+      - texte: "Présent dans les sections de contenu (features, services)"
+        weight: 10
+      - texte: "Taille égale ou inférieure aux autres boutons"
+        weight: 10
+      - texte: "Couleur moins contrastée que le CTA primaire"
+        weight: 10
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+  nav_link:
+    description: "Lien de navigation principale"
+    target_tags: ["a", "button"]
+
+    indices:
+      - texte: "Situé dans un <nav> ou <header>"
+        weight: 25
+      - texte: "Texte court (1-3 mots) sans verbe d'action"
+        weight: 15
+      - texte: "Fait partie d'une liste de liens similaires"
+        weight: 15
+      - texte: "Pas de style bouton (pas de background prononcé)"
+        weight: 10
+      - texte: "href interne (même domaine ou chemin relatif)"
+        weight: 10
+
+    seuils:
+      tres_confiant: 80
+      confiant: 65
+      incertain: 45
+      faible: 0
 ```
 
-#### Étape 3 : Exécuter la commande
+---
 
-```bash
-/track-html-elements --dir ./public
+## 17. Différences avec l'Ancien CDC
+
+| Avant | Après |
+|-------|-------|
+| Règles techniques (`has_class_pattern`) | Règles descriptives (texte humain) |
+| Pas d'accès CSS | Claude analyse les CSS du projet |
+| Analyse fichier par fichier | Analyse cross-fichiers (récurrence) |
+| Rapport 100+ lignes | Rapport concis (~30 lignes) |
+| `data-tracking-event` | `data-track` |
+| `priority` pour conflits | Meilleur score gagne |
+| `combined_rules` | Supprimé |
+| Seuils en anglais | Seuils en français |
+
+---
+
+## 18. Structure du Prompt Claude Code
+
+### Principes de Rédaction
+
+Une commande Claude Code efficace doit être :
+- **Explicite** : Claude ne devine pas, il suit des instructions
+- **Séquentielle** : Étapes ordonnées avec conditions claires
+- **Contraignante** : Règles strictes = comportement prévisible
+- **Complète** : Couvrir tous les cas (succès, erreurs, edge cases)
+
+### Template de Structure
+
+```
+## Prérequis
+[Ce qui DOIT exister avant d'exécuter]
+
+## Objectif
+[But précis de la commande]
+
+## Workflow
+[Étapes séquentielles à suivre]
+
+## Règles Strictes
+[Contraintes NON négociables]
+
+## Recommandations
+[Meilleures pratiques]
+
+## Gestion des Erreurs
+[Que faire en cas de problème]
+
+## Critères de Complétion
+[Quand considérer la tâche terminée]
 ```
 
-**La commande détectera automatiquement** les formulaires en plus des boutons !
+---
 
-***
+## 19. Commande Claude Code Complète
+
+Fichier à créer : `~/.claude/commands/track-html-elements.md`
+
+```markdown
+# /track-html-elements
+
+Injecte automatiquement les attributs `data-track` dans les fichiers HTML en analysant les éléments selon des règles descriptives pondérées.
+
+## Prérequis
+
+Avant de commencer, vérifie que ces fichiers existent :
+
+1. **tracking/tracking-events.yaml**
+   - Contient la section `events:` avec au moins 1 event
+   - Chaque event a : `event_name`, `category`, `trigger`, `selector`, `ruleset`
+
+2. **tracking/tracking-rules.yaml**
+   - Contient la section `rulesets:`
+   - Chaque ruleset référencé dans les events existe
+   - Chaque ruleset a : `description`, `target_tags`, `indices`, `seuils`
+
+3. **Dossier HTML** (argument `--dir`)
+   - Le dossier existe
+   - Contient au moins 1 fichier `.html`
+
+**Si un prérequis manque** → STOP + afficher message d'erreur + proposer de créer un template.
+
+## Objectif
+
+Analyser les fichiers HTML du projet et injecter `data-track="valeur"` sur les éléments qui correspondent aux rulesets définis, selon un score de confiance calculé.
+
+**Entrée** : Fichiers HTML + YAML de configuration
+**Sortie** : Fichiers HTML modifiés + rapport concis
+
+## Workflow
+
+Exécute ces étapes dans l'ordre :
+
+### Étape 1 : Validation
+1. Lire `tracking/tracking-events.yaml`
+2. Lire `tracking/tracking-rules.yaml`
+3. Vérifier que tous les `ruleset` référencés existent
+4. Lister les fichiers `.html` dans `--dir`
+5. Si erreur → STOP avec message explicite
+
+### Étape 2 : Analyse CSS
+1. Chercher les fichiers CSS du projet (`*.css`, `tailwind.config.js`)
+2. Mapper les classes Tailwind/CSS aux styles (couleurs, backgrounds, borders)
+3. Créer un index mental des styles pour référence
+4. Si aucun CSS trouvé → WARNING + continuer (styles non déduits)
+
+### Étape 3 : Analyse Cross-Fichiers
+1. Scanner TOUS les fichiers HTML
+2. Identifier les éléments avec texte/classes identiques sur plusieurs pages
+3. Noter la fréquence d'apparition (ex: "Commencer" → 5 pages)
+
+### Étape 4 : Extraction des Éléments
+Pour chaque fichier HTML :
+1. Parser le HTML
+2. Pour chaque ruleset, extraire les éléments correspondant aux `target_tags`
+3. Collecter les métadonnées : tag, id, classes, texte, section parente, styles déduits
+
+### Étape 5 : Scoring
+Pour chaque élément × chaque ruleset :
+1. Lire chaque `indice` du ruleset
+2. Interpréter le `texte:` en langage naturel
+3. Évaluer si l'élément correspond (oui/non)
+4. Si oui → ajouter le `weight` au score
+5. Calculer : `score = (poids_matchés / poids_total) × 100`
+6. Comparer aux `seuils` pour déterminer le niveau de confiance
+
+### Étape 6 : Résolution des Conflits
+Si un élément matche plusieurs events au-dessus du seuil :
+1. Prendre l'event avec le meilleur score
+2. En cas d'égalité → ordre alphabétique + warning dans le rapport
+
+### Étape 7 : Injection
+Si `--dry-run` n'est PAS actif :
+1. Créer un dossier de backup : `tracking/backups/YYYYMMDD-HHMMSS/`
+2. Copier les fichiers HTML originaux dans ce dossier
+3. Pour chaque élément qualifié :
+   - Injecter `data-track="valeur"` après l'attribut `class`
+   - Préserver l'indentation exacte
+   - NE PAS reformater le HTML
+
+### Étape 8 : Rapport
+Afficher un rapport concis :
+```
+📊 /track-html-elements
+─────────────────────────
+✓ X events avec ruleset
+✓ X rulesets chargés
+✓ X fichiers HTML analysés
+Seuil : [threshold] (≥XX%)
+─────────────────────────
+✅ X attributs injectés
+  [fichier]
+    L.XX  [event_name]  XX%  <tag>texte</tag>
+─────────────────────────
+⚠️ X éléments incertains (50-69%)
+  [fichier]:XX  XX%  <tag>texte</tag>
+─────────────────────────
+Backups : ./tracking/backups/XXXXXX/
+```
 
 ## Règles Strictes
 
-### 1. Un Élément = Un Seul Événement
+Ces règles sont NON négociables :
 
-**JAMAIS** injecter plusieurs attributs `data-tracking-event` sur le même élément.
+1. **Un élément = Un seul data-track**
+   - JAMAIS injecter plusieurs `data-track` sur le même élément
+   - Si conflit → meilleur score gagne
 
-```html
-❌ INTERDIT :
-<button data-tracking-event="button_primary_click" data-tracking-event="conversion_click">
-```
+2. **Préservation HTML**
+   - Garder l'indentation exacte (espaces, tabs)
+   - Placer `data-track` après `class` (ou après `id` si pas de class)
+   - NE PAS reformater, réindenter, ou modifier autre chose
 
-En cas de conflit, utiliser la priorité.
+3. **Backup obligatoire**
+   - Créer backup AVANT toute modification
+   - Exception : mode `--dry-run`
 
-### 2. Cohérence YAML
+4. **Éléments déjà trackés**
+   - Si `data-track` existe déjà → ignorer et mentionner dans le rapport
 
-**JAMAIS** injecter un événement qui n'existe pas dans `tracking-config.yaml`.
+5. **Cohérence YAML**
+   - JAMAIS injecter un event qui n'existe pas dans `tracking-events.yaml`
+   - JAMAIS utiliser un ruleset qui n'existe pas dans `tracking-rules.yaml`
 
-### 3. Préservation HTML
+## Recommandations
 
-- NE PAS modifier l'indentation
-- NE PAS réordonner les attributs
-- NE PAS supprimer des commentaires
-- NE PAS modifier le contenu textuel
+- **Interprétation des indices** : Lis le `texte:` comme une description humaine, pas comme du code. Utilise ton jugement pour évaluer si l'élément correspond.
 
-### 4. Backup Obligatoire
+- **Déduction des styles** : Pour évaluer "fond de couleur primaire", regarde les classes CSS de l'élément et déduis les styles appliqués (Tailwind: `bg-blue-600` = bleu).
 
-Toujours créer un backup avant modification (sauf `--no-backup`).
+- **Contexte** : Prends en compte la position de l'élément (hero, nav, footer), ses voisins (autres boutons), et sa récurrence sur le site.
 
-### 5. Logging Complet
-
-Toutes les décisions doivent être loggées avec justification.
-
-***
+- **Score partiel** : Un indice peut matcher partiellement. Par exemple, "verbe d'action fort" matche mieux pour "Commencer" que pour "Voir".
 
 ## Gestion des Erreurs
 
-### Erreur 1 : YAML Manquant
-
-```
-❌ Erreur : tracking-config.yaml introuvable
-
-Chemin recherché : ./tracking-config.yaml
-
-Actions :
-1. Créer le fichier avec la structure minimale
-2. Spécifier un autre chemin : --config <path>
-
-ARRÊT de l'exécution.
-```
-
-### Erreur 2 : Ruleset Manquant
-
-```
-❌ Erreur : Ruleset "primary_button" introuvable
-
-L'événement "button_primary_click" référence le ruleset "primary_button"
-mais celui-ci n'existe pas dans tracking-rules.yaml.
-
-Action : Ajouter le ruleset ou corriger la référence.
-
-ARRÊT de l'exécution.
-```
-
-### Erreur 3 : HTML Invalide
-
-```
-⚠️ Avertissement : index.html contient du HTML mal formé
-
-Ligne 45 : Balise <div> non fermée
-
-L'élément sera ignoré mais le traitement continue.
-```
-
-### Erreur 4 : Conflit de Priorité
-
-```
-⚠️ Ambiguïté : Égalité parfaite
-
-Élément : <button>Action</button> (ligne 67, services.html)
-
-Événements en conflit :
-- button_primary_click : 75% (priorité 1)
-- button_cta_action : 75% (priorité 1)
-
-→ Choix par défaut : button_cta_action (ordre alphabétique)
-
-Recommandation : Ajuster les priorités dans tracking-config.yaml
-```
-
-***
+| Erreur | Action |
+|--------|--------|
+| `tracking-events.yaml` manquant | STOP + proposer création template |
+| `tracking-rules.yaml` manquant | STOP + proposer création template |
+| Ruleset référencé inexistant | STOP + lister les rulesets disponibles |
+| Dossier `--dir` inexistant | STOP + message |
+| Aucun fichier HTML | STOP + message |
+| CSS introuvable | WARNING + continuer sans déduction de styles |
+| HTML mal formé | WARNING + ignorer les éléments problématiques |
+| Scores égaux (conflit) | Ordre alphabétique + warning dans rapport |
 
 ## Critères de Complétion
 
-La commande est **terminée avec succès** quand :
+La commande est terminée quand :
 
-✅ Tous les fichiers HTML ont été analysés  
-✅ Tous les éléments ont été scorés selon les rulesets  
-✅ Les attributs ont été injectés (confiance ≥ seuil)  
-✅ Backups créés  
-✅ Rapport final généré  
-✅ Logs complets écrits  
+1. ✅ Tous les fichiers HTML ont été analysés
+2. ✅ Tous les éléments qualifiés ont reçu `data-track`
+3. ✅ Le rapport a été affiché
+4. ✅ Les backups ont été créés (sauf `--dry-run`)
 
-***
+**Mode `--dry-run`** : La commande est terminée après affichage du rapport (pas de modification).
+
+## Arguments
+
+| Argument | Obligatoire | Description | Défaut |
+|----------|-------------|-------------|--------|
+| `--dir <path>` | Oui | Dossier contenant les HTML | - |
+| `--threshold` | Non | `tres_confiant`, `confiant`, `incertain` | `confiant` |
+| `--dry-run` | Non | Simulation sans modification | `false` |
+| `--file <path>` | Non | Traiter un seul fichier | - |
+
+## Exemple d'Évaluation d'Indice
+
+**Indice** : `"Fond de couleur primaire (pas outline, pas ghost, pas transparent)"`
+**Weight** : 20
+
+**Élément** : `<button class="btn bg-blue-600 text-white px-6 py-3">Commencer</button>`
+
+**Évaluation** :
+1. Classes CSS : `bg-blue-600` → fond bleu (couleur vive)
+2. Pas de classe `outline`, `ghost`, `transparent` → OK
+3. Résultat : MATCH → +20 points
+```

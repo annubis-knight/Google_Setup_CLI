@@ -14,6 +14,7 @@ import { runHtmlLayer } from '../src/commands/html-layer.js';
 import { runClean } from '../src/commands/clean.js';
 import { runAutoEdit } from '../src/commands/autoedit.js';
 import { runGenerateTracking } from '../src/commands/generate-tracking.js';
+import { runVerifyTracking } from '../src/commands/verify-tracking.js';
 
 const program = new Command();
 
@@ -36,7 +37,7 @@ program
 
 program
   .command('deploy')
-  .description('[Étape 5/6] Déployer la configuration GTM (depuis gtm-config.yaml)')
+  .description('[Étape 6/7] Déployer la configuration GTM (depuis gtm-config.yaml)')
   .option('-d, --domain <domain>', 'Domaine cible')
   .option('-n, --name <name>', 'Nom du projet')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
@@ -66,40 +67,46 @@ program
   .action(runSync);
 
 // ============================================
-// WORKFLOW TRACKING (Étapes 1-6)
+// WORKFLOW TRACKING (Étapes 1-7)
 // ============================================
 
 program
   .command('init-tracking')
-  .description('[Étape 1/6] Initialiser le dossier tracking/ avec le template complet')
+  .description('[Étape 1/7] Initialiser le dossier tracking/ avec events + rules')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('--force', 'Écraser les fichiers existants')
   .action(runInitTracking);
 
 program
   .command('event-setup')
-  .description('[Étape 2/6] Sélectionner les events à tracker')
+  .description('[Étape 2/7] Sélectionner les events à tracker')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runEventSetup);
 
 program
   .command('gtm-config-setup')
-  .description('[Étape 3/6] Générer gtm-config.yaml depuis tracking-events.yaml')
+  .description('[Étape 3/7] Générer gtm-config.yaml depuis tracking-events.yaml')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runGtmConfigSetup);
 
 program
   .command('generate-tracking')
-  .description('[Étape 4/6] Générer tracking.js depuis tracking-events.yaml')
+  .description('[Étape 4/7] Générer tracking.js depuis tracking-events.yaml')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runGenerateTracking);
 
 program
   .command('html-layer')
-  .description('[Étape 6/6] Ajouter les attributs data-track au HTML')
+  .description('[Étape 5/7] Ajouter les attributs data-track au HTML')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('-s, --source <path>', 'Chemin des fichiers HTML (défaut: même que path)')
   .action(runHtmlLayer);
+
+program
+  .command('verify-tracking')
+  .description('[Étape 7/7] Vérifier que tout le setup tracking est complet')
+  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
+  .action(runVerifyTracking);
 
 // ============================================
 // COMMANDES UTILITAIRES

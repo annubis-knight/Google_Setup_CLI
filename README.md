@@ -309,36 +309,126 @@ google-setup deploy -d "mon-site.fr" -n "Mon Site"
 
 ---
 
-### Cas 3 : Projet existant — Créer le plan de taggage
+### Cas 3 : Workflow complet en 7 étapes (recommandé)
 
-**Situation** : Vous avez un projet et voulez documenter/générer le tracking.
+**Situation** : Vous avez un projet et voulez un tracking production-ready garanti.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  WORKFLOW TRACKING - 7 ÉTAPES                                          │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  1. init-tracking      → Créer tracking/ avec events + rules          │
+│  2. event-setup        → Sélectionner les events à activer            │
+│  3. gtm-config-setup   → Générer gtm-config.yaml                      │
+│  4. generate-tracking  → Générer tracking.js                          │
+│  5. html-layer         → Ajouter data-track au HTML                   │
+│     OU /track-html-elements dans Claude Code                          │
+│  6. deploy             → Déployer dans GTM                            │
+│  7. verify-tracking    → Vérifier que tout est prêt                   │
+│                                                                        │
+│  ✅ Si verify-tracking passe → firebase deploy + publier GTM          │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
 
 ```bash
-# 1. Depuis le dossier de votre projet
-cd /mon-projet-existant
-
-# 2. Générer le plan de taggage
+# 1. Initialiser le dossier tracking/
 google-setup init-tracking
 
-# 3. Éditer le YAML pour activer les events voulus
-#    → Ouvrez tracking/gtm-tracking-plan.yml
-#    → Mettez enabled: true sur les events à utiliser
+# 2. Sélectionner les events (interactif)
+google-setup event-setup
 
-# 4. Générer le code JavaScript
-google-setup generate-tracking --force
+# 3. Générer la config GTM
+google-setup gtm-config-setup
 
-# 5. Le fichier tracking/gtm-tracking.js est prêt à l'emploi !
+# 4. Générer tracking.js
+google-setup generate-tracking
+
+# 5. Ajouter les attributs data-track
+google-setup html-layer
+# OU utiliser /track-html-elements dans Claude Code (plus intelligent)
+
+# 6. Déployer dans GTM
+google-setup deploy
+
+# 7. VÉRIFIER que tout est prêt !
+google-setup verify-tracking
+```
+
+```
+🔍 Vérification Tracking - Production Ready
+═══════════════════════════════════════════════════════
+
+  Configuration
+  ────────────────────────────────────────
+  ✓ tracking-events.yaml
+  ✓ tracking-rules.yaml
+  ✓ GA4 Measurement ID
+      G-A1B2C3D4E5
+  ✓ GTM Container ID
+      GTM-ABCD123
+  ✓ Events activés
+      12/56 events activés
+  ✓ gtm-config.yaml
+      12 tags, 12 triggers
+
+  Fichiers
+  ────────────────────────────────────────
+  ✓ tracking.js généré
+      → public/tracking.js (8KB)
+  ✓ tracking.js dans dossier déployable
+      → dossier: public
+
+  Intégration HTML
+  ────────────────────────────────────────
+  ✓ GTM snippet dans HTML
+      → index.html
+  ✓ GTM ID correct dans snippet
+  ✓ tracking.js importé
+      → 5 fichier(s)
+  ✓ Chemin tracking.js valide
+  ✓ Attributs data-track
+      28 attributs (12 uniques)
+
+  Production Ready
+  ────────────────────────────────────────
+  ✓ Events ↔ data-track cohérents
+      12 correspondances
+  ✓ Pas d'IDs placeholder
+
+═══════════════════════════════════════════════════════
+
+  ✅ PRÊT POUR LA PRODUCTION !
+
+  Prochaines étapes :
+    1. google-setup deploy      → Déployer dans GTM
+    2. firebase deploy          → Déployer le site
+    3. Publier le container GTM → GTM > Submit > Publish
+
+  Votre tracking fonctionnera à 100% après ces étapes.
 ```
 
 **Fichiers générés :**
 
 ```
 mon-projet/
+├── public/
+│   └── tracking.js          ← Script à servir (copié automatiquement)
 └── tracking/
-    ├── gtm-tracking-plan.yml    ← Configuration (source de vérité)
-    ├── gtm-tracking-plan.md     ← Documentation lisible
-    └── gtm-tracking.js          ← Code JS prêt à utiliser
+    ├── tracking-events.yaml ← Définition des events (56 possibles)
+    ├── tracking-rules.yaml  ← Règles auto-détection (pour Claude Code)
+    └── gtm-config.yaml      ← Config GTM (tags, triggers, variables)
 ```
+
+**Ce que verify-tracking vérifie (14 points) :**
+
+| Catégorie | Vérifications |
+|-----------|---------------|
+| Configuration | tracking-events.yaml, tracking-rules.yaml, GA4 ID valide, GTM ID valide, events activés, gtm-config.yaml |
+| Fichiers | tracking.js existe, tracking.js dans dossier déployable |
+| Intégration HTML | GTM snippet présent, GTM ID correct, tracking.js importé, chemin valide, data-track présents |
+| Production Ready | Events ↔ data-track cohérents, pas d'IDs placeholder |
 
 ---
 
@@ -547,10 +637,14 @@ Audit & Déploiement automatique Google Analytics
 | `status` | Voir la checklist | `-d, --domain` |
 | `continue` | Reprendre le déploiement | `-d, --domain` `--auto` |
 | `sync` | Sync local → GTM | `-p, --path` `-d, --domain` `--auto` |
-| `init-tracking` | Générer YAML + MD | `-p, --path` `-o, --output` `--force` |
-| `generate-tracking` | Générer JS depuis YAML | `-p, --path` `-i, --input` `-o, --output` `--force` |
+| `init-tracking` | [Étape 1/7] Créer tracking/ avec events + rules | `-p, --path` `--force` |
+| `event-setup` | [Étape 2/7] Sélectionner les events à tracker | `-p, --path` |
+| `gtm-config-setup` | [Étape 3/7] Générer gtm-config.yaml | `-p, --path` |
+| `generate-tracking` | [Étape 4/7] Générer tracking.js | `-p, --path` |
+| `html-layer` | [Étape 5/7] Ajouter data-track au HTML | `-p, --path` `-s, --source` |
+| `deploy` | [Étape 6/7] Déployer dans GTM | `-d, --domain` `-n, --name` `--auto` |
+| `verify-tracking` | [Étape 7/7] Vérifier setup prod-ready | `-p, --path` |
 | `audit` | Auditer un/plusieurs sites | `-d, --domains` `-o, --output` |
-| `deploy` | Déploiement complet | `-d, --domain` `-n, --name` `--auto` |
 | `clean` | Nettoyer GTM (supprimer orphelins) | `-d, --domain` `-p, --path` `--dry-run` `--force` |
 
 ### Template modulable
