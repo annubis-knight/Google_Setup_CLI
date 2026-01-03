@@ -479,8 +479,84 @@ function displayCheck(check, passed, ctx) {
     }
   } else {
     // Détails supplémentaires si échoué
-    if (check.id === 'data_track_per_event' && ctx.missingDataTrack?.length > 0) {
-      console.log(chalk.gray(`      Manquants: ${ctx.missingDataTrack.slice(0, 5).join(', ')}${ctx.missingDataTrack.length > 5 ? '...' : ''}`));
+    switch (check.id) {
+      case 'data_track_per_event':
+        if (ctx.expectedDataTrackValues?.size > 0) {
+          console.log(chalk.gray(`      Attendus (${ctx.expectedDataTrackValues.size}): ${[...ctx.expectedDataTrackValues].join(', ')}`));
+        }
+        if (ctx.dataTrackValues?.length > 0) {
+          console.log(chalk.gray(`      Trouvés (${ctx.dataTrackValues.length}): ${ctx.dataTrackValues.join(', ')}`));
+        }
+        if (ctx.missingDataTrack?.length > 0) {
+          console.log(chalk.red(`      Manquants (${ctx.missingDataTrack.length}): ${ctx.missingDataTrack.join(', ')}`));
+        }
+        if (ctx.dataTrackCoverage !== undefined) {
+          console.log(chalk.gray(`      Couverture: ${ctx.dataTrackCoverage}% (minimum requis: 80%)`));
+        }
+        break;
+
+      case 'tracking_events':
+      case 'tracking_rules':
+      case 'gtm_config':
+        console.log(chalk.gray(`      Fichier non trouvé dans tracking/`));
+        break;
+
+      case 'ga4_id_valid':
+        if (ctx.ga4Id) {
+          console.log(chalk.gray(`      Valeur actuelle: "${ctx.ga4Id}" (format attendu: G-XXXXXXXXXX)`));
+        } else {
+          console.log(chalk.gray(`      Aucun GA4 ID défini dans tracking-events.yaml`));
+        }
+        break;
+
+      case 'gtm_id_valid':
+        if (ctx.gtmId) {
+          console.log(chalk.gray(`      Valeur actuelle: "${ctx.gtmId}" (format attendu: GTM-XXXXXXX)`));
+        } else {
+          console.log(chalk.gray(`      Aucun GTM ID défini dans tracking-events.yaml`));
+        }
+        break;
+
+      case 'events_enabled':
+        console.log(chalk.gray(`      Aucun event trouvé dans tracking-events.yaml`));
+        break;
+
+      case 'tracking_js_exists':
+        console.log(chalk.gray(`      Aucun fichier tracking.js trouvé dans le projet`));
+        console.log(chalk.gray(`      Dossiers scannés: ${SOURCE_FOLDERS.join(', ')}`));
+        break;
+
+      case 'tracking_js_in_source_folder':
+        if (ctx.trackingJsPath) {
+          console.log(chalk.gray(`      Trouvé dans: ${ctx.trackingJsPath}`));
+          console.log(chalk.gray(`      Dossiers sources attendus: ${SOURCE_FOLDERS.join(', ')}`));
+        }
+        break;
+
+      case 'tracking_js_imported_in_js':
+        console.log(chalk.gray(`      Aucun import de tracking.js trouvé dans main.js/app.js/index.js`));
+        break;
+
+      case 'gtm_snippet_in_html':
+        console.log(chalk.gray(`      Aucun snippet GTM (googletagmanager.com/gtm.js) trouvé`));
+        console.log(chalk.gray(`      Vérifiez vos fichiers HTML ou templates`));
+        break;
+
+      case 'gtm_snippet_correct_id':
+        if (ctx.gtmSnippetFile) {
+          console.log(chalk.gray(`      Snippet trouvé dans: ${ctx.gtmSnippetFile}`));
+          console.log(chalk.gray(`      Mais le GTM ID (${ctx.gtmId}) n'y est pas présent`));
+        }
+        break;
+
+      case 'no_placeholder_ids':
+        if (ctx.ga4Id?.includes('XXXX')) {
+          console.log(chalk.gray(`      GA4 ID placeholder: ${ctx.ga4Id}`));
+        }
+        if (ctx.gtmId?.includes('XXXX')) {
+          console.log(chalk.gray(`      GTM ID placeholder: ${ctx.gtmId}`));
+        }
+        break;
     }
   }
 }
