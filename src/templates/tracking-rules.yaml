@@ -164,3 +164,385 @@ rulesets:
       confiant: 70
       incertain: 50
       faible: 0
+
+
+  # ============================================
+  # CONTACT / COMMUNICATION
+  # ============================================
+
+  phone_click:
+    description: "Lien téléphone cliquable"
+    target_tags: ["a"]
+
+    indices:
+      - texte: "href commence par 'tel:'"
+        weight: 40
+
+      - texte: "Contient un numéro de téléphone visible (format: +33, 01, 06, 07, etc.)"
+        weight: 20
+
+      - texte: "Icône téléphone à proximité (classe phone, tel, call, ou SVG téléphone)"
+        weight: 15
+
+      - texte: "Situé dans le header, footer, ou section contact"
+        weight: 10
+
+      - texte: "Texte court (numéro seul ou 'Appelez-nous', 'Nous appeler')"
+        weight: 10
+
+      - texte: "Classe ou ID contenant 'phone', 'tel', 'call'"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  email_click:
+    description: "Lien email cliquable"
+    target_tags: ["a"]
+
+    indices:
+      - texte: "href commence par 'mailto:'"
+        weight: 40
+
+      - texte: "Contient une adresse email visible (format: xxx@xxx.xx)"
+        weight: 20
+
+      - texte: "Icône email/envelope à proximité (classe email, mail, envelope, ou SVG)"
+        weight: 15
+
+      - texte: "Situé dans le header, footer, ou section contact"
+        weight: 10
+
+      - texte: "Texte 'Contactez-nous', 'Email', 'Nous écrire', ou adresse email"
+        weight: 10
+
+      - texte: "Classe ou ID contenant 'email', 'mail', 'contact'"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  whatsapp_click:
+    description: "Lien WhatsApp cliquable"
+    target_tags: ["a"]
+
+    indices:
+      - texte: "href contient 'wa.me' ou 'whatsapp.com' ou 'api.whatsapp'"
+        weight: 40
+
+      - texte: "Icône WhatsApp visible (classe whatsapp, wa, ou SVG WhatsApp)"
+        weight: 25
+
+      - texte: "Texte contient 'WhatsApp', 'Nous écrire sur WhatsApp'"
+        weight: 15
+
+      - texte: "Bouton flottant en bas à droite (position fixed)"
+        weight: 10
+
+      - texte: "Couleur verte caractéristique (#25D366)"
+        weight: 5
+
+      - texte: "Classe ou ID contenant 'whatsapp', 'wa'"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  # ============================================
+  # UI INTERACTIONS
+  # ============================================
+
+  modal_open:
+    description: "Bouton qui ouvre une modale/popup"
+    target_tags: ["button", "a", "div[role=button]"]
+
+    indices:
+      - texte: "Attribut data-toggle='modal' ou data-bs-toggle='modal'"
+        weight: 30
+
+      - texte: "Attribut data-target ou data-bs-target pointant vers un ID (#...)"
+        weight: 20
+
+      - texte: "Classe contenant 'modal-trigger', 'open-modal', 'popup-trigger'"
+        weight: 15
+
+      - texte: "onclick contient 'modal' ou 'popup' ou 'openModal'"
+        weight: 15
+
+      - texte: "Texte 'Voir plus', 'Détails', 'Agrandir', 'Ouvrir'"
+        weight: 10
+
+      - texte: "Icône expand, zoom, plus, ou loupe"
+        weight: 5
+
+      - texte: "href='#' ou href='javascript:' (pas de navigation réelle)"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  video_play:
+    description: "Bouton de lecture vidéo"
+    target_tags: ["button", "a", "div"]
+
+    indices:
+      - texte: "Situé à l'intérieur ou au-dessus d'un élément vidéo/iframe YouTube/Vimeo"
+        weight: 25
+
+      - texte: "Icône play (triangle, classe play, fa-play, ou SVG play)"
+        weight: 25
+
+      - texte: "Classe contenant 'play', 'video-trigger', 'play-button'"
+        weight: 15
+
+      - texte: "onclick ou data-* lié à une vidéo (data-video, data-youtube, data-vimeo)"
+        weight: 15
+
+      - texte: "Texte 'Voir la vidéo', 'Lire', 'Play', 'Regarder'"
+        weight: 10
+
+      - texte: "Position centrée sur une image de preview vidéo"
+        weight: 10
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  accordion_toggle:
+    description: "Bouton qui ouvre/ferme un accordéon (FAQ, détails)"
+    target_tags: ["button", "div", "h2", "h3", "summary"]
+
+    indices:
+      - texte: "Attribut data-toggle='collapse' ou data-bs-toggle='collapse'"
+        weight: 25
+
+      - texte: "Situé dans une structure FAQ ou section avec plusieurs items similaires"
+        weight: 20
+
+      - texte: "Icône chevron, plus/minus, ou flèche qui tourne"
+        weight: 15
+
+      - texte: "Classe contenant 'accordion', 'collapse', 'faq', 'toggle'"
+        weight: 15
+
+      - texte: "aria-expanded présent (true ou false)"
+        weight: 15
+
+      - texte: "Élément <summary> dans un <details>"
+        weight: 10
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  tab_click:
+    description: "Onglet de navigation dans un composant tabs"
+    target_tags: ["button", "a", "li"]
+
+    indices:
+      - texte: "role='tab' ou situé dans un élément avec role='tablist'"
+        weight: 30
+
+      - texte: "Attribut data-toggle='tab' ou data-bs-toggle='tab'"
+        weight: 25
+
+      - texte: "Fait partie d'une liste horizontale de boutons/liens similaires"
+        weight: 15
+
+      - texte: "aria-selected présent"
+        weight: 15
+
+      - texte: "Classe contenant 'tab', 'nav-tab', 'tab-link'"
+        weight: 10
+
+      - texte: "Un seul élément actif visuellement parmi ses frères"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  # ============================================
+  # COOKIES / RGPD
+  # ============================================
+
+  cookie_accept:
+    description: "Bouton d'acceptation des cookies"
+    target_tags: ["button", "a"]
+
+    indices:
+      - texte: "Situé dans une bannière cookie (classe cookie, consent, gdpr, rgpd)"
+        weight: 25
+
+      - texte: "Texte contient 'Accepter', 'Accept', 'J'accepte', 'Tout accepter', 'OK'"
+        weight: 25
+
+      - texte: "Style bouton primaire (fond coloré, mise en avant)"
+        weight: 15
+
+      - texte: "ID ou classe contenant 'accept', 'agree', 'consent', 'allow'"
+        weight: 15
+
+      - texte: "Accompagné d'un bouton 'Refuser' ou 'Personnaliser'"
+        weight: 10
+
+      - texte: "Position fixe en bas ou en haut de page"
+        weight: 10
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  cookie_reject:
+    description: "Bouton de refus des cookies"
+    target_tags: ["button", "a"]
+
+    indices:
+      - texte: "Situé dans une bannière cookie (classe cookie, consent, gdpr, rgpd)"
+        weight: 25
+
+      - texte: "Texte contient 'Refuser', 'Reject', 'Non', 'Decline', 'Tout refuser'"
+        weight: 25
+
+      - texte: "Style bouton secondaire ou lien (outline, moins visible que Accepter)"
+        weight: 15
+
+      - texte: "ID ou classe contenant 'reject', 'decline', 'deny', 'refuse'"
+        weight: 15
+
+      - texte: "Accompagné d'un bouton 'Accepter'"
+        weight: 10
+
+      - texte: "Moins mis en avant visuellement que le bouton Accepter"
+        weight: 10
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  cookie_customize:
+    description: "Bouton pour personnaliser les préférences cookies"
+    target_tags: ["button", "a"]
+
+    indices:
+      - texte: "Situé dans une bannière cookie"
+        weight: 20
+
+      - texte: "Texte contient 'Personnaliser', 'Paramètres', 'Préférences', 'Gérer', 'Customize', 'Settings', 'Manage'"
+        weight: 25
+
+      - texte: "Style lien ou bouton tertiaire (discret, texte simple)"
+        weight: 15
+
+      - texte: "ID ou classe contenant 'customize', 'settings', 'preferences', 'manage', 'options'"
+        weight: 15
+
+      - texte: "Ouvre un panneau de configuration des cookies"
+        weight: 15
+
+      - texte: "Accompagné de boutons Accepter/Refuser"
+        weight: 10
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  cookie_save:
+    description: "Bouton pour sauvegarder les préférences cookies personnalisées"
+    target_tags: ["button"]
+
+    indices:
+      - texte: "Situé dans un panneau de configuration cookies (pas la bannière initiale)"
+        weight: 25
+
+      - texte: "Texte contient 'Sauvegarder', 'Enregistrer', 'Save', 'Confirmer', 'Valider'"
+        weight: 25
+
+      - texte: "Apparaît après avoir modifié des toggles/checkboxes de cookies"
+        weight: 15
+
+      - texte: "Style bouton primaire ou de validation"
+        weight: 10
+
+      - texte: "ID ou classe contenant 'save', 'confirm', 'submit', 'validate'"
+        weight: 10
+
+      - texte: "Ferme le panneau de configuration après clic"
+        weight: 15
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
+
+
+  # ============================================
+  # ERREURS / FEEDBACK
+  # ============================================
+
+  form_error:
+    description: "Message d'erreur de validation de formulaire"
+    target_tags: ["div", "span", "p", "label"]
+
+    indices:
+      - texte: "Classe contenant 'error', 'invalid', 'danger', 'alert', 'validation'"
+        weight: 25
+
+      - texte: "Couleur rouge ou orange (text-danger, text-red, color: red)"
+        weight: 20
+
+      - texte: "Situé à proximité immédiate d'un champ de formulaire (input, select, textarea)"
+        weight: 15
+
+      - texte: "Texte contient 'requis', 'invalide', 'obligatoire', 'required', 'invalid', 'incorrect'"
+        weight: 15
+
+      - texte: "Apparaît dynamiquement après une tentative de soumission"
+        weight: 10
+
+      - texte: "role='alert' ou aria-live='polite' ou aria-invalid='true'"
+        weight: 10
+
+      - texte: "Icône d'avertissement, croix, ou point d'exclamation"
+        weight: 5
+
+    seuils:
+      tres_confiant: 85
+      confiant: 70
+      incertain: 50
+      faible: 0
