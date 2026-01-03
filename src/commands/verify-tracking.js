@@ -25,7 +25,7 @@ const SOURCE_FOLDERS = ['src', 'js', 'assets/js', 'scripts', '.'];
  * Dossiers à ignorer lors du scan
  */
 const IGNORE_PATTERNS = [
-  'node_modules/**', '.git/**', 'tracking/**',
+  '**/node_modules/**', '.git/**', 'tracking/**',
   '.firebase/**', '.cache/**', 'coverage/**',
   'dist/**', 'build/**', 'out/**'
 ];
@@ -107,9 +107,9 @@ const CHECKS = [
   },
   {
     id: 'events_enabled',
-    name: 'Events activés',
+    name: 'Events définis',
     category: CATEGORY.CONFIG,
-    description: 'Au moins un event avec enabled: true',
+    description: 'Au moins un event dans tracking-events.yaml',
     critical: true,
     check: (ctx) => {
       const eventsPath = join(ctx.projectPath, 'tracking', 'tracking-events.yaml');
@@ -117,14 +117,14 @@ const CHECKS = [
       try {
         const content = yaml.load(readFileSync(eventsPath, 'utf8'));
         const events = content.events || [];
-        const enabled = events.filter(e => e.enabled === true);
-        ctx.enabledEvents = enabled;
-        ctx.enabledEventsCount = enabled.length;
-        ctx.totalEventsCount = events.length;
+        // Tous les events présents sont considérés comme activés
+        // (pas besoin de propriété "enabled", présence = activé)
+        ctx.enabledEvents = events;
+        ctx.enabledEventsCount = events.length;
 
         // Extraire les valeurs data-track attendues depuis les selectors
         ctx.expectedDataTrackValues = new Set();
-        for (const event of enabled) {
+        for (const event of events) {
           if (event.selector) {
             const match = event.selector.match(/data-track=["']([^"']+)["']/);
             if (match) {
@@ -133,7 +133,7 @@ const CHECKS = [
           }
         }
 
-        return enabled.length > 0;
+        return events.length > 0;
       } catch (e) {
         return false;
       }
@@ -453,7 +453,7 @@ function displayCheck(check, passed, ctx) {
         console.log(chalk.gray(`      ${ctx.gtmId}`));
         break;
       case 'events_enabled':
-        console.log(chalk.gray(`      ${ctx.enabledEventsCount}/${ctx.totalEventsCount} events activés`));
+        console.log(chalk.gray(`      ${ctx.enabledEventsCount} events définis`));
         break;
       case 'gtm_config':
         console.log(chalk.gray(`      ${ctx.gtmTags} tags, ${ctx.gtmTriggers} triggers`));
