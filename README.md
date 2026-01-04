@@ -36,14 +36,16 @@ GTM + GA4 + Search Console + Tracking Code — en quelques commandes.
 │                         GOOGLE SETUP CLI                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  🤖 AUTOEDIT       →  Analyse HTML avec IA → tracking plan auto     │
-│  📋 AUDIT          →  Analyse votre config existante (score A+ → F) │
-│  🚀 DEPLOY         →  Crée GTM + GA4 + balises from scratch         │
-│  📄 INIT-TRACKING  →  Génère le plan de taggage (YAML + MD)         │
-│  ⚡ GENERATE       →  Crée gtm-tracking.js depuis le YAML           │
-│  🔄 SYNC           →  Synchronise votre code local avec GTM         │
-│  📊 STATUS         →  Affiche la progression et les manques         │
-│  ▶️ CONTINUE       →  Reprend le déploiement là où il s'est arrêté  │
+│  0️⃣  AUTOEDIT       →  Analyse HTML avec IA → tracking plan auto    │
+│  0️⃣ᵇ AUDIT          →  Analyse votre config existante (score A+→F) │
+│  1️⃣  INIT-TRACKING  →  Génère le dossier tracking/ avec events     │
+│  2️⃣  EVENT-SETUP    →  Sélectionne les events à tracker            │
+│  3️⃣  GTM-CONFIG     →  Génère gtm-config.yaml                      │
+│  4️⃣  GENERATE       →  Crée tracking.js depuis le YAML             │
+│  5️⃣  HTML-LAYER     →  Ajoute les attributs data-track             │
+│  6️⃣  DEPLOY         →  Crée GTM + GA4 + balises from scratch       │
+│  6️⃣ᵇ SYNC           →  Synchronise votre code local avec GTM       │
+│  7️⃣  VERIFY         →  Vérifie que tout est production-ready       │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -57,7 +59,7 @@ GTM + GA4 + Search Console + Tracking Code — en quelques commandes.
 | Pas de documentation tracking | Génération de tracking-plan.yml + .md |
 | Code tracking à écrire à la main | Auto-génération de gtm-tracking.js |
 | Synchronisation code ↔ GTM manuelle | Commande `sync` automatique |
-| Pas de vision de ce qui manque | Checklist interactive avec `status` |
+| Pas de vision de ce qui manque | Vérification avec `verify-tracking` |
 
 ---
 
@@ -467,62 +469,7 @@ google-setup sync -d "mon-site.fr"
 
 ---
 
-### Cas 5 : Voir ce qui manque
-
-**Situation** : Vous voulez savoir où en est la configuration d'un site.
-
-```bash
-google-setup status -d "mon-site.fr"
-```
-
-```
-═══════════════════════════════════════════════════════════════════════
-  CHECKLIST - mon-site.fr
-═══════════════════════════════════════════════════════════════════════
-
-✅ 1. Google Analytics 4 (100%)
-   ✓ Propriété GA4 existe
-   ✓ Data Stream configuré
-   ✓ Measurement ID récupéré
-
-✅ 2. Google Tag Manager (100%)
-   ✓ Conteneur GTM existe (GTM-XXXXXXX)
-   ✓ Balise GA4 Config présente
-
-⏳ 3. DataLayer Custom (60%)
-   ✓ Variables DataLayer (8)
-   ✓ Triggers custom events (5)
-   ✗ Tag GA4 pour scroll_depth
-   ✗ Tag GA4 pour video_play
-
-⏳ 4. Search Console (50%)
-   ✓ Site vérifié
-   ✗ Sitemap soumis
-
-───────────────────────────────────────────────────────────────────────
-🎯 Progression globale : ████████████████░░░░ 78%  [Grade: B]
-───────────────────────────────────────────────────────────────────────
-
-💡 Conseil: Lancez "google-setup continue" pour compléter automatiquement
-```
-
----
-
-### Cas 6 : Continuer un déploiement incomplet
-
-**Situation** : Un déploiement a été interrompu ou vous voulez compléter ce qui manque.
-
-```bash
-# Mode interactif (confirmation à chaque étape)
-google-setup continue -d "mon-site.fr"
-
-# Mode automatique (tout d'un coup)
-google-setup continue -d "mon-site.fr" --auto
-```
-
----
-
-### Cas 7 : Auditer plusieurs sites
+### Cas 5 : Auditer plusieurs sites
 
 **Situation** : Vous gérez plusieurs sites et voulez un état des lieux.
 
@@ -546,7 +493,7 @@ google-setup audit -d "site1.fr,site2.fr,site3.fr"
 
 ---
 
-### Cas 8 : Nettoyer GTM (supprimer les orphelins)
+### Cas 6 : Nettoyer GTM (supprimer les orphelins)
 
 **Situation** : Votre GTM contient des triggers/tags/variables qui ne sont plus utilisés dans votre code.
 
@@ -616,36 +563,38 @@ Affiche un menu avec toutes les options :
 Audit & Déploiement automatique Google Analytics
 
 ? Que voulez-vous faire ?
-  🤖 AutoEdit - Générer tracking plan avec IA (autoedit)
-  📋 Voir la progression d'un site (status)
-  ▶️  Continuer le déploiement (continue)
-  🔄 Synchroniser projet local → GTM (sync)
-  📄 Générer plan de taggage (init-tracking)
-  ⚡ Générer gtm-tracking.js (generate-tracking)
+─── WORKFLOW TRACKING ───
+  0️⃣  [Étape 0] AutoEdit - Générer tracking IA
+  0️⃣ᵇ [Étape 0bis] Auditer un domaine existant
+  1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)
+  2️⃣  [Étape 2] Sélectionner les events (event-setup)
+  3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)
+  4️⃣  [Étape 4] Générer tracking.js (generate-tracking)
+  5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)
+  6️⃣  [Étape 6] Déployer dans GTM (deploy)
+  6️⃣ᵇ [Étape 6bis] Synchroniser projet → GTM (sync)
+  7️⃣  [Étape 7] Vérifier production-ready (verify-tracking)
+─── UTILITAIRES ───
   🧹 Nettoyer GTM (clean)
-  🔍 Auditer un ou plusieurs domaines
-  🚀 Déployer from scratch
   ❌ Quitter
 ```
 
 ### Référence des commandes
 
-| Commande | Description | Options |
-|----------|-------------|---------|
-| `init` | Configurer les credentials | - |
-| `autoedit` | Analyser HTML avec IA → tracking plan | `-p, --path` `-s, --source` `--step` `--ai` `--debug` `--dry-run` |
-| `status` | Voir la checklist | `-d, --domain` |
-| `continue` | Reprendre le déploiement | `-d, --domain` `--auto` |
-| `sync` | Sync local → GTM | `-p, --path` `-d, --domain` `--auto` |
-| `init-tracking` | [Étape 1/7] Créer tracking/ avec events + rules | `-p, --path` `--force` |
-| `event-setup` | [Étape 2/7] Sélectionner les events à tracker | `-p, --path` |
-| `gtm-config-setup` | [Étape 3/7] Générer gtm-config.yaml | `-p, --path` |
-| `generate-tracking` | [Étape 4/7] Générer tracking.js | `-p, --path` |
-| `html-layer` | [Étape 5/7] Ajouter data-track au HTML | `-p, --path` `-s, --source` |
-| `deploy` | [Étape 6/7] Déployer dans GTM | `-d, --domain` `-n, --name` `--auto` |
-| `verify-tracking` | [Étape 7/7] Vérifier setup prod-ready | `-p, --path` |
-| `audit` | Auditer un/plusieurs sites | `-d, --domains` `-o, --output` |
-| `clean` | Nettoyer GTM (supprimer orphelins) | `-d, --domain` `-p, --path` `--dry-run` `--force` |
+| # | Commande | Description | Options |
+|---|----------|-------------|---------|
+| - | `init` | Configurer les credentials | - |
+| 0 | `autoedit` | Analyser HTML avec IA → tracking plan | `-p, --path` `-s, --source` `--step` `--ai` `--debug` `--dry-run` |
+| 0bis | `audit` | Auditer un/plusieurs sites | `-d, --domains` `-o, --output` |
+| 1 | `init-tracking` | Créer tracking/ avec events + rules | `-p, --path` `--force` |
+| 2 | `event-setup` | Sélectionner les events à tracker | `-p, --path` |
+| 3 | `gtm-config-setup` | Générer gtm-config.yaml | `-p, --path` |
+| 4 | `generate-tracking` | Générer tracking.js | `-p, --path` |
+| 5 | `html-layer` | Ajouter data-track au HTML | `-p, --path` `-s, --source` |
+| 6 | `deploy` | Déployer dans GTM | `-d, --domain` `-n, --name` `--auto` |
+| 6bis | `sync` | Sync local → GTM | `-p, --path` `-d, --domain` `--auto` |
+| 7 | `verify-tracking` | Vérifier setup prod-ready | `-p, --path` |
+| - | `clean` | Nettoyer GTM (supprimer orphelins) | `-d, --domain` `-p, --path` `--dry-run` `--force` |
 
 ### Template modulable
 
@@ -806,7 +755,8 @@ export function initScrollTracking() {
 | `init-tracking` | Dans le dossier de votre projet web |
 | `generate-tracking` | Dans le dossier de votre projet web |
 | `sync` | Dans le dossier de votre projet web |
-| `status`, `continue`, `deploy`, `audit` | N'importe où (spécifier le domaine) |
+| `deploy`, `audit` | N'importe où (spécifier le domaine) |
+| `verify-tracking` | Dans le dossier de votre projet web |
 
 ### Comment configurer l'IA pour autoedit ?
 
@@ -885,15 +835,6 @@ google-setup sync -d "mon-site.fr"
 ```
 
 La commande compare votre code avec GTM et crée uniquement ce qui manque.
-
-### Le status affiche "Bloqué par X" ?
-
-C'est normal. Les étapes ont des dépendances :
-```
-GA4 → GTM → DataLayer → Conversions
-```
-
-Si GA4 n'est pas configuré, GTM sera "bloqué". Utilisez `continue` pour déployer dans l'ordre.
 
 ### Comment déployer le tracking avec Firebase ?
 
@@ -974,12 +915,16 @@ node bin/cli.js # Lancer en dev
 src/
 ├── commands/       # Commandes CLI
 │   ├── audit.js
+│   ├── autoedit.js
 │   ├── deploy.js
-│   ├── status.js
-│   ├── continue.js
 │   ├── sync.js
+│   ├── clean.js
 │   ├── init-tracking.js
-│   └── generate-tracking.js
+│   ├── event-setup.js
+│   ├── gtm-config-setup.js
+│   ├── generate-tracking.js
+│   ├── html-layer.js
+│   └── verify-tracking.js
 ├── detectors/      # Analyse existant (GTM, GA4, Search Console)
 ├── deployers/      # Création (triggers, tags, variables)
 ├── templates/      # Templates YAML/MD

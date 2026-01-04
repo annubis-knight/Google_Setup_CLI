@@ -4,8 +4,6 @@ import { interactiveMode } from '../src/commands/interactive.js';
 import { runAudit } from '../src/commands/audit.js';
 import { runDeploy } from '../src/commands/deploy.js';
 import { runInit } from '../src/commands/init.js';
-import { runStatus } from '../src/commands/status.js';
-import { runContinue } from '../src/commands/continue.js';
 import { runSync } from '../src/commands/sync.js';
 import { runInitTracking } from '../src/commands/init-tracking.js';
 import { runEventSetup } from '../src/commands/event-setup.js';
@@ -43,20 +41,6 @@ program
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('--auto', 'Mode automatique sans confirmation')
   .action(runDeploy);
-
-program
-  .command('status')
-  .description('Voir la checklist de progression KPI')
-  .option('-d, --domain <domain>', 'Domaine à analyser')
-  .action(runStatus);
-
-program
-  .command('continue')
-  .description('Continuer le déploiement automatiquement')
-  .option('-d, --domain <domain>', 'Domaine cible')
-  .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
-  .option('--auto', 'Mode automatique sans confirmation')
-  .action(runContinue);
 
 program
   .command('sync')

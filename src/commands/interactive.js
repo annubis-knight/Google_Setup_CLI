@@ -3,8 +3,6 @@ import chalk from 'chalk';
 import figlet from 'figlet';
 import { runAudit } from './audit.js';
 import { runDeploy } from './deploy.js';
-import { runStatus } from './status.js';
-import { runContinue } from './continue.js';
 import { runSync } from './sync.js';
 import { handleInitTrackingInteractive } from './init-tracking.js';
 import { handleEventSetupInteractive } from './event-setup.js';
@@ -28,21 +26,19 @@ export async function interactiveMode() {
       name: 'action',
       message: 'Que voulez-vous faire ?',
       choices: [
-        new inquirer.Separator(chalk.cyan('─── WORKFLOW TRACKING (7 étapes) ───')),
+        new inquirer.Separator(chalk.cyan('─── WORKFLOW TRACKING ───')),
+        { name: '0️⃣  [Étape 0] AutoEdit - Générer tracking IA', value: 'autoedit' },
+        { name: '0️⃣ᵇ [Étape 0bis] Auditer un domaine existant', value: 'audit' },
         { name: '1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)', value: 'init-tracking' },
         { name: '2️⃣  [Étape 2] Sélectionner les events (event-setup)', value: 'event-setup' },
         { name: '3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)', value: 'gtm-config-setup' },
         { name: '4️⃣  [Étape 4] Générer tracking.js (generate-tracking)', value: 'generate-tracking' },
         { name: '5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)', value: 'html-layer' },
         { name: '6️⃣  [Étape 6] Déployer dans GTM (deploy)', value: 'deploy' },
+        { name: '6️⃣ᵇ [Étape 6bis] Synchroniser projet → GTM (sync)', value: 'sync' },
         { name: '7️⃣  [Étape 7] Vérifier production-ready (verify-tracking)', value: 'verify-tracking' },
-        new inquirer.Separator(chalk.cyan('─── AUTRES COMMANDES ───')),
-        { name: '🤖 AutoEdit - Générer tracking avec IA', value: 'autoedit' },
-        { name: '📋 Voir la progression KPI (status)', value: 'status' },
-        { name: '▶️  Continuer le déploiement (continue)', value: 'continue' },
-        { name: '🔄 Synchroniser projet → GTM (sync)', value: 'sync' },
+        new inquirer.Separator(chalk.cyan('─── UTILITAIRES ───')),
         { name: '🧹 Nettoyer GTM (clean)', value: 'clean' },
-        { name: '🔍 Auditer un domaine', value: 'audit' },
         new inquirer.Separator(''),
         { name: '❌ Quitter', value: 'exit' }
       ]
@@ -77,12 +73,6 @@ export async function interactiveMode() {
         break;
       case 'autoedit':
         await handleAutoEditInteractive();
-        break;
-      case 'status':
-        await handleStatusInteractive();
-        break;
-      case 'continue':
-        await handleContinueInteractive();
         break;
       case 'sync':
         await handleSyncInteractive();
@@ -165,38 +155,6 @@ async function handleDeployInteractive() {
   ]);
 
   await runDeploy({ ...answers, path: process.cwd() });
-  console.log('');
-}
-
-async function handleStatusInteractive() {
-  const { domain } = await inquirer.prompt([{
-    type: 'input',
-    name: 'domain',
-    message: 'Domaine à analyser :',
-    validate: v => /^[a-z0-9\-\.]+\.[a-z]{2,}$/i.test(v) || 'Domaine invalide'
-  }]);
-
-  await runStatus({ domain });
-  console.log('');
-}
-
-async function handleContinueInteractive() {
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'domain',
-      message: 'Domaine cible :',
-      validate: v => /^[a-z0-9\-\.]+\.[a-z]{2,}$/i.test(v) || 'Domaine invalide'
-    },
-    {
-      type: 'confirm',
-      name: 'auto',
-      message: 'Mode automatique (sans confirmation à chaque étape) ?',
-      default: false
-    }
-  ]);
-
-  await runContinue({ ...answers, path: process.cwd() });
   console.log('');
 }
 
