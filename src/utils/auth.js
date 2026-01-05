@@ -6,6 +6,8 @@ import { join } from 'path';
 const SCOPES = [
   'https://www.googleapis.com/auth/tagmanager.readonly',
   'https://www.googleapis.com/auth/tagmanager.edit.containers',
+  'https://www.googleapis.com/auth/tagmanager.edit.containerversions',
+  'https://www.googleapis.com/auth/tagmanager.publish',
   'https://www.googleapis.com/auth/analytics.readonly',
   'https://www.googleapis.com/auth/analytics.edit',
   'https://www.googleapis.com/auth/webmasters.readonly',

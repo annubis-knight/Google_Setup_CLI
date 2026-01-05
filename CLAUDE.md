@@ -60,12 +60,40 @@ GTM templates use these placeholders that get replaced during deployment:
 - `{{DOMAIN}}` - Site domain
 - `{{PROJECT_NAME}}` - Project name
 
-## CLI Commands (Target)
+## CLI Commands
 
 ```bash
-google-setup                          # Interactive mode
-google-setup audit --domains="a.com,b.com"  # Audit domains
-google-setup deploy --domain="a.com" --auto # Auto-deploy missing tools
-google-setup export --gtm-id=GTM-XXX        # Export GTM as template
-google-setup init                           # Configure API credentials
+google-setup                          # Interactive mode (menu with 8 steps)
+google-setup init                     # Configure API credentials
+google-setup audit --domains="a.com"  # Audit domains
+
+# Workflow (steps 1-8)
+google-setup init-tracking            # [1] Initialize tracking/ folder
+google-setup event-setup              # [2] Select events to track
+google-setup gtm-config-setup         # [3] Generate GTM config
+google-setup generate-tracking        # [4] Generate tracking.js
+google-setup html-layer               # [5] Add data-track attributes
+google-setup deploy --domain="a.com"  # [6] Deploy to GTM
+google-setup verify-tracking          # [7] Verify production-ready
+google-setup publish --domain="a.com" # [8] Publish GTM to production
 ```
+
+## Publish Command (Step 8)
+
+The `publish` command automates GTM version creation and publication:
+
+- **Auto-versioning**: Semantic versioning (v1.0.0 → v1.0.1 → v1.0.2...)
+- **Auto-description**: Generates diff of changes (tags/triggers/variables added/modified/deleted)
+- **One command**: Creates version + publishes to production
+
+```bash
+google-setup publish --domain example.com
+google-setup publish --gtm-id GTM-XXXXX
+```
+
+### Required OAuth Scopes
+
+The publish feature requires these GTM scopes in `src/utils/auth.js`:
+- `tagmanager.edit.containers` - Create/edit containers
+- `tagmanager.edit.containerversions` - Create versions
+- `tagmanager.publish` - Publish versions

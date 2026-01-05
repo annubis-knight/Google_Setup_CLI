@@ -1,6 +1,6 @@
-import inquirer from 'inquirer';
-import pkg from 'enquirer';
-const { Select } = pkg;
+import select, { Separator } from '@inquirer/select';
+import input from '@inquirer/input';
+import confirm from '@inquirer/confirm';
 import chalk from 'chalk';
 import figlet from 'figlet';
 import { runAudit } from './audit.js';
@@ -14,6 +14,7 @@ import { handleCleanInteractive } from './clean.js';
 import { runAutoEdit } from './autoedit.js';
 import { handleGenerateTrackingInteractive } from './generate-tracking.js';
 import { handleVerifyTrackingInteractive } from './verify-tracking.js';
+import { handlePublishInteractive } from './publish.js';
 
 /**
  * Descriptions détaillées pour chaque commande
@@ -128,6 +129,17 @@ const COMMAND_HELP = {
     │   complet   │     │   config    │     │  ou ✗ TODO  │
     └─────────────┘     └─────────────┘     └─────────────┘`
   },
+  publish: {
+    description: 'Publier les modifications GTM en production',
+    objectif: 'Créer une version et la publier automatiquement',
+    input: 'Domaine ou GTM-ID',
+    output: 'Version publiée en production',
+    schema: `
+    ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+    │  Workspace  │ ──▶ │  Version    │ ──▶ │    LIVE     │
+    │   (draft)   │     │  (v1.0.x)   │     │  Production │
+    └─────────────┘     └─────────────┘     └─────────────┘`
+  },
   clean: {
     description: 'Nettoyer GTM en supprimant les éléments orphelins',
     objectif: 'Supprimer triggers/tags/variables non utilisés',
@@ -149,53 +161,48 @@ const COMMAND_HELP = {
 };
 
 /**
- * Afficher le panneau d'aide pour une commande
+ * Générer la description pour le help panel
  */
-function displayHelpPanel(commandValue) {
-  const help = COMMAND_HELP[commandValue];
-  if (!help || commandValue === 'exit') return '';
+function getHelpDescription(value) {
+  const help = COMMAND_HELP[value];
+  if (!help || value === 'exit' || !help.description) return '';
 
   const lines = [
-    '',
-    chalk.cyan('┌' + '─'.repeat(70) + '┐'),
-    chalk.cyan('│') + chalk.bold.white(` ${help.description}`.padEnd(70)) + chalk.cyan('│'),
-    chalk.cyan('├' + '─'.repeat(70) + '┤'),
-    chalk.cyan('│') + chalk.gray(` Objectif: ${help.objectif}`.padEnd(70)) + chalk.cyan('│'),
-    chalk.cyan('│') + chalk.gray(` Input:    ${help.input}`.padEnd(70)) + chalk.cyan('│'),
-    chalk.cyan('│') + chalk.gray(` Output:   ${help.output}`.padEnd(70)) + chalk.cyan('│'),
-    chalk.cyan('├' + '─'.repeat(70) + '┤'),
+    chalk.bold.white(help.description),
+    chalk.gray(`Objectif: ${help.objectif}`),
+    chalk.gray(`Input: ${help.input}`),
+    chalk.gray(`Output: ${help.output}`),
   ];
 
-  // Ajouter le schéma ASCII
-  const schemaLines = help.schema.split('\n').filter(l => l.trim());
-  for (const line of schemaLines) {
-    lines.push(chalk.cyan('│') + chalk.yellow(line.padEnd(70)) + chalk.cyan('│'));
+  if (help.schema) {
+    const schemaLines = help.schema.split('\n').filter(l => l.trim());
+    lines.push('');
+    lines.push(...schemaLines.map(l => chalk.yellow(l)));
   }
-
-  lines.push(chalk.cyan('└' + '─'.repeat(70) + '┘'));
 
   return lines.join('\n');
 }
 
 /**
- * Menu principal avec descriptions dynamiques
+ * Menu principal
  */
 const MENU_CHOICES = [
-  { message: chalk.cyan.bold('─── PRÉPARATION ───'), role: 'separator' },
-  { name: '0️⃣  [Étape 0] AutoEdit - Générer tracking IA', value: 'autoedit' },
-  { name: '0️⃣ᵇ [Étape 0bis] Auditer un domaine existant', value: 'audit' },
-  { message: chalk.cyan.bold('─── WORKFLOW TRACKING ───'), role: 'separator' },
-  { name: '1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)', value: 'init-tracking' },
-  { name: '2️⃣  [Étape 2] Sélectionner les events (event-setup)', value: 'event-setup' },
-  { name: '3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)', value: 'gtm-config-setup' },
-  { name: '4️⃣  [Étape 4] Générer tracking.js (generate-tracking)', value: 'generate-tracking' },
-  { name: '5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)', value: 'html-layer' },
-  { name: '6️⃣  [Étape 6] Déployer dans GTM (deploy)', value: 'deploy' },
-  { name: '6️⃣ᵇ [Étape 6bis] Synchroniser projet → GTM (sync)', value: 'sync' },
-  { name: '7️⃣  [Étape 7] Vérifier production-ready (verify-tracking)', value: 'verify-tracking' },
-  { message: chalk.cyan.bold('─── UTILITAIRES ───'), role: 'separator' },
-  { name: '🧹 Nettoyer GTM (clean)', value: 'clean' },
-  { message: '', role: 'separator' },
+  new Separator(chalk.cyan.bold('─── PRÉPARATION ───')),
+  { name: '0️⃣  [Étape 0] AutoEdit - Générer tracking IA', value: 'autoedit', description: getHelpDescription('autoedit') },
+  { name: '0️⃣ᵇ [Étape 0bis] Auditer un domaine existant', value: 'audit', description: getHelpDescription('audit') },
+  new Separator(chalk.cyan.bold('─── WORKFLOW TRACKING ───')),
+  { name: '1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)', value: 'init-tracking', description: getHelpDescription('init-tracking') },
+  { name: '2️⃣  [Étape 2] Sélectionner les events (event-setup)', value: 'event-setup', description: getHelpDescription('event-setup') },
+  { name: '3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)', value: 'gtm-config-setup', description: getHelpDescription('gtm-config-setup') },
+  { name: '4️⃣  [Étape 4] Générer tracking.js (generate-tracking)', value: 'generate-tracking', description: getHelpDescription('generate-tracking') },
+  { name: '5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)', value: 'html-layer', description: getHelpDescription('html-layer') },
+  { name: '6️⃣  [Étape 6] Déployer dans GTM (deploy)', value: 'deploy', description: getHelpDescription('deploy') },
+  { name: '6️⃣ᵇ [Étape 6bis] Synchroniser projet → GTM (sync)', value: 'sync', description: getHelpDescription('sync') },
+  { name: '7️⃣  [Étape 7] Vérifier production-ready (verify-tracking)', value: 'verify-tracking', description: getHelpDescription('verify-tracking') },
+  { name: '8️⃣  [Étape 8] Publier GTM en production (publish)', value: 'publish', description: getHelpDescription('publish') },
+  new Separator(chalk.cyan.bold('─── UTILITAIRES ───')),
+  { name: '🧹 Nettoyer GTM (clean)', value: 'clean', description: getHelpDescription('clean') },
+  new Separator(''),
   { name: '❌ Quitter', value: 'exit' }
 ];
 
@@ -207,19 +214,13 @@ export async function interactiveMode() {
   console.log(chalk.gray('Audit & Déploiement automatique Google Analytics\n'));
 
   while (true) {
-    // Utiliser enquirer Select avec footer dynamique
-    const prompt = new Select({
-      name: 'action',
-      message: 'Que voulez-vous faire ?',
-      choices: MENU_CHOICES,
-      footer() {
-        return displayHelpPanel(this.focused?.value);
-      }
-    });
-
     let action;
     try {
-      action = await prompt.run();
+      action = await select({
+        message: 'Que voulez-vous faire ?',
+        choices: MENU_CHOICES,
+        pageSize: 20
+      });
     } catch (e) {
       // Ctrl+C
       console.log(chalk.green('\n✨ À bientôt !\n'));
@@ -267,6 +268,9 @@ export async function interactiveMode() {
       case 'audit':
         await handleAuditInteractive();
         break;
+      case 'publish':
+        await handlePublishInteractive();
+        break;
     }
 
     // Ré-afficher le header après une commande
@@ -277,12 +281,10 @@ export async function interactiveMode() {
 }
 
 async function handleAuditInteractive() {
-  const { domains } = await inquirer.prompt([{
-    type: 'input',
-    name: 'domains',
+  const domains = await input({
     message: 'Domaine(s) à auditer (séparés par des virgules) :',
     validate: v => v.length > 0 || 'Au moins un domaine requis'
-  }]);
+  });
 
   await runAudit({ domains });
   console.log('');
@@ -310,12 +312,10 @@ async function handleDeployInteractive() {
     console.log(chalk.gray(`   Projet: ${localConfig.projectName || ''}`));
     console.log();
 
-    const { useLocal } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'useLocal',
+    const useLocal = await confirm({
       message: 'Utiliser cette configuration ?',
       default: true
-    }]);
+    });
 
     if (useLocal) {
       await runDeploy({
@@ -328,42 +328,32 @@ async function handleDeployInteractive() {
     }
   }
 
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'domain',
-      message: 'Domaine cible :',
-      validate: v => /^[a-z0-9\-\.]+\.[a-z]{2,}$/i.test(v) || 'Domaine invalide'
-    },
-    {
-      type: 'input',
-      name: 'name',
-      message: 'Nom du projet :',
-      default: (ans) => ans.domain.split('.')[0]
-    }
-  ]);
+  const domain = await input({
+    message: 'Domaine cible :',
+    validate: v => /^[a-z0-9\-\.]+\.[a-z]{2,}$/i.test(v) || 'Domaine invalide'
+  });
 
-  await runDeploy({ ...answers, path: process.cwd() });
+  const name = await input({
+    message: 'Nom du projet :',
+    default: domain.split('.')[0]
+  });
+
+  await runDeploy({ domain, name, path: process.cwd() });
   console.log('');
 }
 
 async function handleSyncInteractive() {
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'path',
-      message: 'Chemin du projet local (entrée = répertoire courant) :',
-      default: process.cwd()
-    },
-    {
-      type: 'input',
-      name: 'domain',
-      message: 'Domaine cible (pour le conteneur GTM) :',
-      validate: v => /^[a-z0-9\-\.]+\.[a-z]{2,}$/i.test(v) || 'Domaine invalide'
-    }
-  ]);
+  const path = await input({
+    message: 'Chemin du projet local (entrée = répertoire courant) :',
+    default: process.cwd()
+  });
 
-  await runSync(answers);
+  const domain = await input({
+    message: 'Domaine cible (pour le conteneur GTM) :',
+    validate: v => /^[a-z0-9\-\.]+\.[a-z]{2,}$/i.test(v) || 'Domaine invalide'
+  });
+
+  await runSync({ path, domain });
   console.log('');
 }
 
@@ -382,9 +372,7 @@ async function handleAutoEditInteractive() {
   console.log(chalk.gray('  7. Validation     - Vérifier la cohérence'));
   console.log(chalk.gray('  8. Generation     - Écrire les fichiers finaux\n'));
 
-  const { mode } = await inquirer.prompt([{
-    type: 'list',
-    name: 'mode',
+  const mode = await select({
     message: 'Comment voulez-vous exécuter le pipeline ?',
     choices: [
       { name: '🚀 Exécuter toutes les étapes (recommandé)', value: 'all' },
@@ -398,37 +386,31 @@ async function handleAutoEditInteractive() {
       { name: '8️⃣  Étape 8 - Generation', value: '8' },
       { name: '↩️  Retour au menu', value: 'back' }
     ]
-  }]);
+  });
 
   if (mode === 'back') {
     return;
   }
 
-  const answers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'path',
-      message: 'Chemin du projet (entrée = répertoire courant) :',
-      default: process.cwd()
-    },
-    {
-      type: 'input',
-      name: 'source',
-      message: 'Chemin des fichiers HTML à scanner (entrée = même que projet) :',
-      default: ''
-    },
-    {
-      type: 'confirm',
-      name: 'debug',
-      message: 'Activer le mode debug (sauvegarder les données intermédiaires) ?',
-      default: true
-    }
-  ]);
+  const projectPath = await input({
+    message: 'Chemin du projet (entrée = répertoire courant) :',
+    default: process.cwd()
+  });
+
+  const source = await input({
+    message: 'Chemin des fichiers HTML à scanner (entrée = même que projet) :',
+    default: ''
+  });
+
+  const debug = await confirm({
+    message: 'Activer le mode debug (sauvegarder les données intermédiaires) ?',
+    default: true
+  });
 
   const options = {
-    path: answers.path,
-    source: answers.source || answers.path,
-    debug: answers.debug,
+    path: projectPath,
+    source: source || projectPath,
+    debug: debug,
     step: mode !== 'all' ? mode : undefined
   };
 

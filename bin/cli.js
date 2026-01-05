@@ -13,6 +13,7 @@ import { runClean } from '../src/commands/clean.js';
 import { runAutoEdit } from '../src/commands/autoedit.js';
 import { runGenerateTracking } from '../src/commands/generate-tracking.js';
 import { runVerifyTracking } from '../src/commands/verify-tracking.js';
+import { runPublish } from '../src/commands/publish.js';
 
 const program = new Command();
 
@@ -88,9 +89,16 @@ program
 
 program
   .command('verify-tracking')
-  .description('[Étape 7/7] Vérifier que tout le setup tracking est complet')
+  .description('[Étape 7/8] Vérifier que tout le setup tracking est complet')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runVerifyTracking);
+
+program
+  .command('publish')
+  .description('[Étape 8/8] Publier les modifications GTM en production')
+  .option('-d, --domain <domain>', 'Domaine du site')
+  .option('-g, --gtm-id <id>', 'GTM Container ID (GTM-XXXXX)')
+  .action(runPublish);
 
 // ============================================
 // COMMANDES UTILITAIRES
