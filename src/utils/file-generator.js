@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
 import { detectLocalProject } from '../detectors/local-project-detector.js';
 
 /**
@@ -231,9 +231,29 @@ function trackPurchase(transactionId, items, value, currency = 'EUR') {
 }
 
 /**
- * Sauvegarde la configuration locale du projet
+ * Sauvegarde la configuration locale du projet avec merge intelligent
  */
 export function saveLocalConfig(config) {
-  writeFileSync('./.google-setup.json', JSON.stringify(config, null, 2));
-  console.log('   ✓ .google-setup.json créé');
+  const configPath = './.google-setup.json';
+  let existing = {};
+  if (existsSync(configPath)) {
+    try {
+      existing = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // Deep merge
+  const merged = {
+    ...existing,
+    ...config,
+    ga4: { ...existing.ga4, ...config.ga4 },
+    gtm: { ...existing.gtm, ...config.gtm },
+    thirdParty: { ...existing.thirdParty, ...config.thirdParty },
+    updatedAt: new Date().toISOString()
+  };
+
+  writeFileSync(configPath, JSON.stringify(merged, null, 2));
+  console.log('   ✓ .google-setup.json mis à jour');
 }

@@ -260,7 +260,7 @@ export async function runHtmlLayer(options) {
   report.config = { projectPath, sourcePath, debugMode };
 
   console.log();
-  console.log(chalk.cyan.bold('🏷️  [Étape 6/6] Ajout des Attributs HTML'));
+  console.log(chalk.cyan.bold('🏷️  [Étape 5/8] Ajout des Attributs HTML'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 

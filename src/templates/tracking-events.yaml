@@ -16,19 +16,19 @@ events:
     description: "Soumission du formulaire de contact principal"
     category: "conversion"
     trigger: "submit"
-    selector: "form[data-track='contact']"
+    selector: "[data-track='contact']"
 
   - event_name: "form_quote"
     description: "Demande de devis"
     category: "conversion"
     trigger: "submit"
-    selector: "form[data-track='quote']"
+    selector: "[data-track='quote']"
 
   - event_name: "form_callback"
     description: "Demande de rappel téléphonique"
     category: "conversion"
     trigger: "submit"
-    selector: "form[data-track='callback']"
+    selector: "[data-track='callback']"
 
   - event_name: "phone_click"
     description: "Clic sur un numéro de téléphone"
@@ -68,7 +68,7 @@ events:
     description: "Inscription à la newsletter"
     category: "lead"
     trigger: "submit"
-    selector: "form[data-track='newsletter']"
+    selector: "[data-track='newsletter']"
 
   - event_name: "download_pdf"
     description: "Téléchargement d'un fichier PDF"
@@ -347,12 +347,12 @@ events:
     description: "Page 404 affichée (page non trouvée)"
     category: "navigation"
     trigger: "load"
-    selector: "body.error-404, body.page-404, [data-page='404']"
+    selector: "[data-page='404']"
 
   - event_name: "error_form"
     description: "Erreur de validation de formulaire affichée"
     category: "navigation"
-    trigger: "click"
+    trigger: "load"
     selector: "[data-track='form-error']"
 
   - event_name: "search_no_results"
@@ -365,4 +365,4 @@ events:
     description: "Page d'erreur serveur affichée"
     category: "navigation"
     trigger: "load"
-    selector: "body.error-500, body.error, [data-page='error']"
+    selector: "[data-page='error']"

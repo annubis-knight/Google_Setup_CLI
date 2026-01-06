@@ -123,13 +123,28 @@ const CHECKS = [
         ctx.enabledEventsCount = events.length;
 
         // Extraire les valeurs data-track attendues depuis les selectors
-        ctx.expectedDataTrackValues = new Set();
+        // UNIQUEMENT pour les events qui utilisent un selector avec data-track
+        // (exclut scroll, timer, load events qui n'ont pas de data-track)
+        ctx.dataTrackToEventName = new Map(); // data-track value → event_name
+        ctx.eventNameToDataTrack = new Map(); // event_name → data-track value
+        ctx.eventsWithDataTrack = [];
+        ctx.eventsWithoutDataTrack = [];
+
         for (const event of events) {
           if (event.selector) {
             const match = event.selector.match(/data-track=["']([^"']+)["']/);
             if (match) {
-              ctx.expectedDataTrackValues.add(match[1]);
+              const dataTrackValue = match[1];
+              ctx.dataTrackToEventName.set(dataTrackValue, event.event_name);
+              ctx.eventNameToDataTrack.set(event.event_name, dataTrackValue);
+              ctx.eventsWithDataTrack.push(event.event_name);
+            } else {
+              // Event avec selector mais sans data-track (ex: body.error-404)
+              ctx.eventsWithoutDataTrack.push(event.event_name);
             }
+          } else {
+            // Event sans selector (scroll, timer)
+            ctx.eventsWithoutDataTrack.push(event.event_name);
           }
         }
 
@@ -159,6 +174,43 @@ const CHECKS = [
       }
     },
     fix: 'google-setup gtm-config-setup'
+  },
+  {
+    id: 'third_party_ids',
+    name: 'IDs balises tierces',
+    category: CATEGORY.CONFIG,
+    description: 'IDs balises tierces configurés (si présents)',
+    critical: false, // Warning seulement
+    check: (ctx) => {
+      const configPath = join(ctx.projectPath, '.google-setup.json');
+      if (!existsSync(configPath)) {
+        ctx.thirdPartyCount = 0;
+        return true; // Pas de config = OK
+      }
+
+      try {
+        const config = JSON.parse(readFileSync(configPath, 'utf8'));
+        const thirdParty = config.thirdParty || {};
+        ctx.thirdPartyTags = [];
+        ctx.invalidThirdPartyTags = [];
+
+        for (const [configKey, value] of Object.entries(thirdParty)) {
+          // Vérifier simplement que l'ID n'est pas vide
+          const isValid = value && value.length > 0;
+          ctx.thirdPartyTags.push({ name: configKey, value, valid: isValid });
+          if (!isValid) {
+            ctx.invalidThirdPartyTags.push({ name: configKey, value, error: 'ID vide' });
+          }
+        }
+
+        ctx.thirdPartyCount = ctx.thirdPartyTags.length;
+        return ctx.invalidThirdPartyTags.length === 0;
+      } catch (e) {
+        ctx.thirdPartyCount = 0;
+        return true;
+      }
+    },
+    fix: 'Vérifiez les IDs dans .google-setup.json (thirdParty section)'
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -328,9 +380,22 @@ const CHECKS = [
     description: 'Chaque event activé a au moins 1 élément HTML',
     critical: true,
     check: async (ctx) => {
-      if (!ctx.expectedDataTrackValues || ctx.expectedDataTrackValues.size === 0) {
-        return false;
+      if (!ctx.dataTrackToEventName || ctx.dataTrackToEventName.size === 0) {
+        // Pas d'events avec data-track = OK (scroll, timer only)
+        ctx.dataTrackCoverage = 100;
+        ctx.matchedDataTrack = 0;
+        ctx.missingEvents = [];
+        ctx.optionalEvents = [];
+        return true;
       }
+
+      // Events facultatifs (injectés par JS, non vérifiables dans HTML statique)
+      // Pattern basé sur le NOM de l'event (event_name)
+      const OPTIONAL_EVENT_PATTERNS = [
+        /^cookie_/i,  // cookie_accept, cookie_reject, etc.
+      ];
+
+      const isOptionalEvent = (eventName) => OPTIONAL_EVENT_PATTERNS.some(p => p.test(eventName));
 
       // Scanner tous les fichiers HTML/templates
       const htmlFiles = await glob('**/*.{html,ejs,hbs,pug,php,jsx,tsx,vue}', {
@@ -338,7 +403,7 @@ const CHECKS = [
         ignore: IGNORE_PATTERNS
       });
 
-      const foundValues = new Set();
+      const foundDataTrackValues = new Set();
       let totalCount = 0;
 
       for (const file of htmlFiles) {
@@ -348,34 +413,58 @@ const CHECKS = [
           totalCount += matches.length;
           matches.forEach(m => {
             const value = m.match(/["']([^"']+)["']/)[1];
-            foundValues.add(value);
+            foundDataTrackValues.add(value);
           });
         }
       }
 
       ctx.dataTrackCount = totalCount;
-      ctx.dataTrackValues = [...foundValues];
+      ctx.foundDataTrackValues = [...foundDataTrackValues];
 
-      // Comparer avec les events activés
-      const expected = [...ctx.expectedDataTrackValues];
-      const missing = expected.filter(e => {
-        // Normaliser pour comparaison (cta-primary vs cta_primary)
-        const normalized = e.replace(/-/g, '_');
-        return ![...foundValues].some(f =>
-          f === e || f.replace(/-/g, '_') === normalized || f === e.replace(/_/g, '-')
+      // Fonction pour vérifier si un data-track value est trouvé dans le HTML
+      const isDataTrackFound = (dataTrackValue) => {
+        const normalized = dataTrackValue.replace(/-/g, '_');
+        return [...foundDataTrackValues].some(f =>
+          f === dataTrackValue ||
+          f.replace(/-/g, '_') === normalized ||
+          f === dataTrackValue.replace(/_/g, '-')
         );
+      };
+
+      // Séparer les events en obligatoires et facultatifs (par nom d'event)
+      const allEventNames = ctx.eventsWithDataTrack;
+      const requiredEvents = allEventNames.filter(e => !isOptionalEvent(e));
+      const optionalEventsList = allEventNames.filter(e => isOptionalEvent(e));
+
+      // Trouver les events OBLIGATOIRES dont le data-track est manquant
+      const missingEvents = requiredEvents.filter(eventName => {
+        const dataTrackValue = ctx.eventNameToDataTrack.get(eventName);
+        return !isDataTrackFound(dataTrackValue);
       });
 
-      ctx.missingDataTrack = missing;
-      ctx.matchedDataTrack = expected.length - missing.length;
+      // Trouver les events FACULTATIFS dont le data-track est manquant
+      const optionalMissingEvents = optionalEventsList.filter(eventName => {
+        const dataTrackValue = ctx.eventNameToDataTrack.get(eventName);
+        return !isDataTrackFound(dataTrackValue);
+      });
 
-      // OK si au moins 80% des events ont leur data-track
-      const coverage = ctx.matchedDataTrack / expected.length;
-      ctx.dataTrackCoverage = Math.round(coverage * 100);
+      ctx.missingEvents = missingEvents;
+      ctx.optionalEvents = optionalMissingEvents;
+      ctx.requiredEventsCount = requiredEvents.length;
+      ctx.matchedEventsCount = requiredEvents.length - missingEvents.length;
 
-      return coverage >= 0.8;
+      // Calculer la couverture sur les OBLIGATOIRES uniquement
+      if (requiredEvents.length === 0) {
+        ctx.dataTrackCoverage = 100;
+      } else {
+        const coverage = ctx.matchedEventsCount / requiredEvents.length;
+        ctx.dataTrackCoverage = Math.round(coverage * 100);
+      }
+
+      // OK si 100% des events OBLIGATOIRES ont leur data-track
+      return missingEvents.length === 0;
     },
-    fix: '/track-html-elements (Claude Code) ou google-setup html-layer'
+    fix: 'Ajoutez les data-track manquants dans votre HTML ou supprimez les events non utilisés de tracking-events.yaml'
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -458,6 +547,14 @@ function displayCheck(check, passed, ctx) {
       case 'gtm_config':
         console.log(chalk.gray(`      ${ctx.gtmTags} tags, ${ctx.gtmTriggers} triggers`));
         break;
+      case 'third_party_ids':
+        if (ctx.thirdPartyCount > 0) {
+          const names = ctx.thirdPartyTags.map(t => t.name).join(', ');
+          console.log(chalk.gray(`      ${ctx.thirdPartyCount} balise(s): ${names}`));
+        } else {
+          console.log(chalk.gray(`      Aucune balise tierce configurée`));
+        }
+        break;
       case 'tracking_js_exists':
         console.log(chalk.gray(`      → ${ctx.trackingJsPath}`));
         break;
@@ -471,7 +568,11 @@ function displayCheck(check, passed, ctx) {
         console.log(chalk.gray(`      → ${ctx.gtmSnippetFile}`));
         break;
       case 'data_track_per_event':
-        console.log(chalk.gray(`      ${ctx.matchedDataTrack}/${ctx.expectedDataTrackValues.size} events couverts (${ctx.dataTrackCoverage}%)`));
+        console.log(chalk.gray(`      ${ctx.matchedEventsCount}/${ctx.requiredEventsCount} events obligatoires couverts (${ctx.dataTrackCoverage}%)`));
+        if (ctx.optionalEvents?.length > 0) {
+          console.log(chalk.hex('#FFA500')(`      ○ Non vérifiables (${ctx.optionalEvents.length}): ${ctx.optionalEvents.join(', ')}`));
+          console.log(chalk.gray(`        → Probablement injectés par JavaScript (cookies, etc.)`));
+        }
         break;
       case 'webpack_config_exists':
         console.log(chalk.gray(`      → ${ctx.bundlerConfig}`));
@@ -481,17 +582,15 @@ function displayCheck(check, passed, ctx) {
     // Détails supplémentaires si échoué
     switch (check.id) {
       case 'data_track_per_event':
-        if (ctx.expectedDataTrackValues?.size > 0) {
-          console.log(chalk.gray(`      Attendus (${ctx.expectedDataTrackValues.size}): ${[...ctx.expectedDataTrackValues].join(', ')}`));
+        if (ctx.foundDataTrackValues?.length > 0) {
+          console.log(chalk.gray(`      Trouvés dans HTML (${ctx.foundDataTrackValues.length}): ${ctx.foundDataTrackValues.join(', ')}`));
         }
-        if (ctx.dataTrackValues?.length > 0) {
-          console.log(chalk.gray(`      Trouvés (${ctx.dataTrackValues.length}): ${ctx.dataTrackValues.join(', ')}`));
+        if (ctx.missingEvents?.length > 0) {
+          console.log(chalk.red(`      ✗ Manquants (${ctx.missingEvents.length}): ${ctx.missingEvents.join(', ')}`));
         }
-        if (ctx.missingDataTrack?.length > 0) {
-          console.log(chalk.red(`      Manquants (${ctx.missingDataTrack.length}): ${ctx.missingDataTrack.join(', ')}`));
-        }
-        if (ctx.dataTrackCoverage !== undefined) {
-          console.log(chalk.gray(`      Couverture: ${ctx.dataTrackCoverage}% (minimum requis: 80%)`));
+        if (ctx.optionalEvents?.length > 0) {
+          console.log(chalk.hex('#FFA500')(`      ○ Non vérifiables (${ctx.optionalEvents.length}): ${ctx.optionalEvents.join(', ')}`));
+          console.log(chalk.gray(`        → Probablement injectés par JavaScript (cookies, etc.)`));
         }
         break;
 
@@ -549,6 +648,15 @@ function displayCheck(check, passed, ctx) {
         }
         break;
 
+      case 'third_party_ids':
+        if (ctx.invalidThirdPartyTags?.length > 0) {
+          for (const tag of ctx.invalidThirdPartyTags) {
+            console.log(chalk.yellow(`      ○ ${tag.name}: "${tag.value}"`));
+            console.log(chalk.gray(`        → ${tag.error}`));
+          }
+        }
+        break;
+
       case 'no_placeholder_ids':
         if (ctx.ga4Id?.includes('XXXX')) {
           console.log(chalk.gray(`      GA4 ID placeholder: ${ctx.ga4Id}`));
@@ -568,7 +676,7 @@ export async function runVerifyTracking(options) {
   const projectPath = options.path || process.cwd();
 
   console.log();
-  console.log(chalk.cyan.bold('🔍 Vérification Tracking - Production Ready'));
+  console.log(chalk.cyan.bold('🔍 [Étape 6/8] Vérification Tracking - Production Ready'));
   console.log(chalk.gray('═'.repeat(55)));
   console.log();
 
@@ -617,10 +725,10 @@ export async function runVerifyTracking(options) {
     console.log(chalk.green.bold('  ✅ PRÊT POUR LA PRODUCTION !'));
     console.log();
     console.log(chalk.white('  Prochaines étapes :'));
-    console.log(chalk.cyan('    1. google-setup deploy      → Déployer dans GTM'));
-    console.log(chalk.cyan('    2. npm run build            → Builder le projet'));
-    console.log(chalk.cyan('    3. firebase deploy          → Déployer le site'));
-    console.log(chalk.cyan('    4. Publier le container GTM → GTM > Submit > Publish'));
+    console.log(chalk.cyan('    1. google-setup create-gtm-container → Créer le conteneur GTM'));
+    console.log(chalk.cyan('    2. npm run build                     → Builder le projet'));
+    console.log(chalk.cyan('    3. firebase deploy                   → Déployer le site'));
+    console.log(chalk.cyan('    4. google-setup publish              → Publier GTM en production'));
     console.log();
     console.log(chalk.gray('  Votre tracking fonctionnera à 100% après ces étapes.'));
 

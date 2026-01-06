@@ -10,15 +10,15 @@ import { detectGTM } from '../detectors/gtm-detector.js';
 import { detectGA4 } from '../detectors/ga4-detector.js';
 import { deployGA4 } from '../deployers/ga4-deployer.js';
 import { deployGTM } from '../deployers/gtm-deployer.js';
-import { generateGTMFiles, saveLocalConfig } from '../utils/file-generator.js';
+import { generateGTMFiles } from '../utils/file-generator.js';
 
-export async function runDeploy(options) {
+export async function runCreateGtmContainer(options) {
   const projectPath = options.path || process.cwd();
   const gtmConfigPath = join(projectPath, 'tracking', 'gtm-config.yaml');
   const localConfigPath = join(projectPath, '.google-setup.json');
 
   console.log();
-  console.log(chalk.cyan.bold('🚀 [Étape 4/5] Déploiement GTM'));
+  console.log(chalk.cyan.bold('🚀 [Étape 7/8] Création Conteneur GTM'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
@@ -143,28 +143,16 @@ export async function runDeploy(options) {
     const containerId = gtmData.containerId || existingGTM.containerId;
     generateGTMFiles(containerId);
 
-    // 7. Sauvegarder la config locale
-    const newLocalConfig = {
-      version: '2.0.0',
-      domain,
-      projectName,
-      createdAt: new Date().toISOString(),
-      ga4: {
-        measurementId: ga4Data.measurementId,
-        propertyId: ga4Data.propertyId
-      },
-      gtm: {
-        containerId: containerId
-      }
-    };
-    saveLocalConfig(newLocalConfig);
-
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-    // 8. Afficher le résumé
-    displayDeploymentSummary(newLocalConfig, elapsed, gtmConfig);
+    // 7. Afficher le résumé
+    const displayConfig = {
+      ga4: { measurementId: ga4Data.measurementId },
+      gtm: { containerId: containerId }
+    };
+    displayDeploymentSummary(displayConfig, elapsed, gtmConfig);
 
-    return newLocalConfig;
+    return displayConfig;
 
   } catch (error) {
     spinner.fail(`Erreur: ${error.message}`);
@@ -186,8 +174,7 @@ function displayDeploymentSummary(config, elapsed, gtmConfig) {
 
   output += `${chalk.bold('Fichiers générés :')}\n`;
   output += `   • components/gtm-head.html\n`;
-  output += `   • components/gtm-body.html\n`;
-  output += `   • .google-setup.json\n\n`;
+  output += `   • components/gtm-body.html\n\n`;
 
   output += `${chalk.bold('Prochaines étapes :')}\n`;
   output += `   1. ${chalk.white('Inclure gtm-head.html dans <head>')}\n`;

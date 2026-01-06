@@ -4,14 +4,49 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 import yaml from 'js-yaml';
+import inquirer from 'inquirer';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+/**
+ * Extrait les balises tierces (type: html) depuis le template gtm-config.yaml
+ */
+function loadThirdPartyTagsFromTemplate() {
+  const templatePath = join(__dirname, '..', 'templates', 'gtm-config.yaml');
+  const templateContent = readFileSync(templatePath, 'utf8');
+  const template = yaml.load(templateContent);
+
+  // Filtrer les tags de type "html" avec un third_party_id
+  const thirdPartyTags = (template.tags || []).filter(tag =>
+    tag.type === 'html' && tag.third_party_id
+  );
+
+  return thirdPartyTags.map(tag => {
+    // Extraire le placeholder ID (ex: {{CONTENTSQUARE_TAG_ID}} -> CONTENTSQUARE_TAG_ID)
+    const idMatch = tag.third_party_id.match(/\{\{(\w+)\}\}/);
+    const configKey = idMatch ? idMatch[1] : tag.third_party_id;
+
+    return {
+      name: tag.name.replace(' - Tracking Code', ''),
+      configKey: configKey,
+      html: tag.html,
+      triggers: tag.triggers || ['All Pages']
+    };
+  });
+}
 
 /**
  * Génère la configuration GTM à partir des events
+ * @param {Object} projectInfo - Infos projet depuis tracking-events.yaml
+ * @param {Array} events - Liste des events
+ * @param {Object} thirdPartyConfig - Config balises tierces depuis .google-setup.json
  */
-function generateGtmConfig(projectInfo, events) {
+function generateGtmConfig(projectInfo, events, thirdPartyConfig = {}) {
   const date = new Date().toISOString().split('T')[0];
 
   // Grouper les events par catégorie
@@ -123,6 +158,19 @@ function generateGtmConfig(projectInfo, events) {
     });
   }
 
+  // === Ajouter les balises tierces sélectionnées ===
+  for (const tag of (thirdPartyConfig.selectedTags || [])) {
+    // Remplacer le placeholder par l'ID réel
+    const html = tag.html.replace(new RegExp(`\\{\\{${tag.configKey}\\}\\}`, 'g'), tag.id);
+
+    config.tags.push({
+      name: `${tag.name} - Tracking Code`,
+      type: 'html',
+      html: html,
+      triggers: tag.triggers
+    });
+  }
+
   return config;
 }
 
@@ -208,7 +256,11 @@ triggers:
 tags:
 `;
 
-  for (const tag of config.tags) {
+  // Séparer tags GA4 et tags tiers
+  const ga4Tags = config.tags.filter(t => t.type !== 'html');
+  const thirdPartyTags = config.tags.filter(t => t.type === 'html');
+
+  for (const tag of ga4Tags) {
     content += `  - name: "${tag.name}"
     type: "${tag.type}"
 `;
@@ -238,6 +290,31 @@ tags:
     content += '\n';
   }
 
+  // Ajouter les balises tierces (type html)
+  if (thirdPartyTags.length > 0) {
+    content += `# ============================================
+# BALISES TIERCES
+# ============================================
+`;
+    for (const tag of thirdPartyTags) {
+      content += `  - name: "${tag.name}"
+    type: "${tag.type}"
+    html: |
+`;
+      // Indenter chaque ligne du HTML
+      for (const line of tag.html.split('\n')) {
+        content += `      ${line}\n`;
+      }
+      content += `    triggers:
+`;
+      for (const t of tag.triggers) {
+        content += `      - "${t}"
+`;
+      }
+      content += '\n';
+    }
+  }
+
   // Résumé
   const triggerCount = config.triggers.filter(t => !t._category).length;
   const tagCount = config.tags.length;
@@ -263,7 +340,7 @@ export async function runGtmConfigSetup(options) {
   const outputPath = join(projectPath, 'tracking', 'gtm-config.yaml');
 
   console.log();
-  console.log(chalk.cyan.bold('⚙️  [Étape 3/5] Génération de la Config GTM'));
+  console.log(chalk.cyan.bold('⚙️  [Étape 3/8] Génération de la Config GTM'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
@@ -285,31 +362,121 @@ export async function runGtmConfigSetup(options) {
     return;
   }
 
-  // Générer la config GTM
+  // Charger la config locale depuis .google-setup.json
+  const localConfigPath = join(projectPath, '.google-setup.json');
+  let localConfig = {};
+  let existingThirdPartyIds = {};
+  if (existsSync(localConfigPath)) {
+    try {
+      localConfig = JSON.parse(readFileSync(localConfigPath, 'utf8'));
+      existingThirdPartyIds = localConfig.thirdParty || {};
+    } catch (e) {
+      // Ignorer si fichier invalide
+    }
+  }
+
   console.log(chalk.gray(`   ${parsed.events.length} events trouvés`));
-  console.log(chalk.gray('   Génération de la configuration GTM...'));
 
-  const gtmConfig = generateGtmConfig(parsed.project || {}, parsed.events);
-  const gtmYaml = configToYaml(gtmConfig);
+  // === Charger les balises tierces depuis le template ===
+  const availableTags = loadThirdPartyTagsFromTemplate();
 
-  // Sauvegarder
-  writeFileSync(outputPath, gtmYaml);
+  if (availableTags.length > 0) {
+    console.log();
+    console.log(chalk.cyan('📦 Balises tierces'));
 
-  // Stats
-  const triggerCount = gtmConfig.triggers.filter(t => !t._category).length;
-  const tagCount = gtmConfig.tags.length;
+    const tagChoices = availableTags.map(tag => ({
+      name: tag.name,
+      value: tag.configKey,
+      checked: !!existingThirdPartyIds[tag.configKey]  // Pré-coché si ID existant
+    }));
 
-  console.log();
-  console.log(chalk.green.bold('✅ Configuration GTM générée !'));
-  console.log();
-  console.log(chalk.white('   Fichier: tracking/gtm-config.yaml'));
-  console.log(chalk.gray(`   • ${gtmConfig.variables.length} variables`));
-  console.log(chalk.gray(`   • ${triggerCount} triggers (1 pageview + ${triggerCount - 1} custom events)`));
-  console.log(chalk.gray(`   • ${tagCount} tags (1 Config + ${tagCount - 1} Event par catégorie)`));
-  console.log();
-  console.log(chalk.white('Prochaine étape :'));
-  console.log(chalk.gray('   [Étape 4] google-setup deploy → Déployer dans GTM'));
-  console.log();
+    const { selectedTagKeys } = await inquirer.prompt([{
+      type: 'checkbox',
+      name: 'selectedTagKeys',
+      message: 'Quelles balises tierces inclure dans GTM ?',
+      choices: tagChoices
+    }]);
+
+    // Collecter les IDs manquants
+    const selectedTagsWithIds = [];
+    const newThirdPartyIds = {};
+
+    for (const configKey of selectedTagKeys) {
+      const tag = availableTags.find(t => t.configKey === configKey);
+      let tagId = existingThirdPartyIds[configKey];
+
+      if (!tagId) {
+        const { value } = await inquirer.prompt([{
+          type: 'input',
+          name: 'value',
+          message: `${tag.name} - ID :`,
+          validate: v => v.length > 0 || 'ID requis'
+        }]);
+        tagId = value;
+      }
+
+      newThirdPartyIds[configKey] = tagId;
+      selectedTagsWithIds.push({
+        ...tag,
+        id: tagId
+      });
+    }
+
+    console.log();
+    console.log(chalk.gray('   Génération de la configuration GTM...'));
+
+    const gtmConfig = generateGtmConfig(parsed.project || {}, parsed.events, { selectedTags: selectedTagsWithIds });
+    const gtmYaml = configToYaml(gtmConfig);
+
+    // Sauvegarder
+    writeFileSync(outputPath, gtmYaml);
+
+    // Stats
+    const triggerCount = gtmConfig.triggers.filter(t => !t._category).length;
+    const tagCount = gtmConfig.tags.length;
+    const thirdPartyTagCount = gtmConfig.tags.filter(t => t.type === 'html').length;
+    const ga4TagCount = tagCount - thirdPartyTagCount;
+
+    console.log();
+    console.log(chalk.green.bold('✅ Configuration GTM générée !'));
+    console.log();
+    console.log(chalk.white('   Fichier: tracking/gtm-config.yaml'));
+    console.log(chalk.gray(`   • ${gtmConfig.variables.length} variables`));
+    console.log(chalk.gray(`   • ${triggerCount} triggers (1 pageview + ${triggerCount - 1} custom events)`));
+    console.log(chalk.gray(`   • ${ga4TagCount} tags GA4 (1 Config + ${ga4TagCount - 1} Event par catégorie)`));
+    if (thirdPartyTagCount > 0) {
+      console.log(chalk.gray(`   • ${thirdPartyTagCount} balise(s) tierce(s)`));
+    }
+    console.log();
+    console.log(chalk.white('Prochaine étape :'));
+    console.log(chalk.gray('   [Étape 4] google-setup deploy → Déployer dans GTM'));
+    console.log();
+
+  } else {
+    // Pas de balises tierces disponibles
+    console.log();
+    console.log(chalk.gray('   Génération de la configuration GTM...'));
+
+    const gtmConfig = generateGtmConfig(parsed.project || {}, parsed.events, {});
+    const gtmYaml = configToYaml(gtmConfig);
+
+    writeFileSync(outputPath, gtmYaml);
+
+    const triggerCount = gtmConfig.triggers.filter(t => !t._category).length;
+    const tagCount = gtmConfig.tags.length;
+
+    console.log();
+    console.log(chalk.green.bold('✅ Configuration GTM générée !'));
+    console.log();
+    console.log(chalk.white('   Fichier: tracking/gtm-config.yaml'));
+    console.log(chalk.gray(`   • ${gtmConfig.variables.length} variables`));
+    console.log(chalk.gray(`   • ${triggerCount} triggers (1 pageview + ${triggerCount - 1} custom events)`));
+    console.log(chalk.gray(`   • ${tagCount} tags GA4 (1 Config + ${tagCount - 1} Event par catégorie)`));
+    console.log();
+    console.log(chalk.white('Prochaine étape :'));
+    console.log(chalk.gray('   [Étape 4] google-setup deploy → Déployer dans GTM'));
+    console.log();
+  }
 }
 
 /**

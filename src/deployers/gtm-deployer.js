@@ -96,6 +96,17 @@ function convertYamlToGtmFormat(gtmConfig, ga4MeasurementId) {
         ],
         firingTriggerNames: tag.triggers || []
       });
+    } else if (tag.type === 'html') {
+      // Custom HTML tag pour balises tierces (Hotjar, Meta Pixel, etc.)
+      result.tags.push({
+        name: tag.name,
+        type: 'html',
+        parameter: [
+          { type: 'TEMPLATE', key: 'html', value: tag.html },
+          { type: 'BOOLEAN', key: 'supportDocumentWrite', value: 'false' }
+        ],
+        firingTriggerName: tag.triggers?.[0] || 'All Pages'
+      });
     }
   }
 

@@ -4,7 +4,7 @@ import confirm from '@inquirer/confirm';
 import chalk from 'chalk';
 import figlet from 'figlet';
 import { runAudit } from './audit.js';
-import { runDeploy } from './deploy.js';
+import { runCreateGtmContainer } from './create-gtm-container.js';
 import { runSync } from './sync.js';
 import { handleInitTrackingInteractive } from './init-tracking.js';
 import { handleEventSetupInteractive } from './event-setup.js';
@@ -15,6 +15,7 @@ import { runAutoEdit } from './autoedit.js';
 import { handleGenerateTrackingInteractive } from './generate-tracking.js';
 import { handleVerifyTrackingInteractive } from './verify-tracking.js';
 import { handlePublishInteractive } from './publish.js';
+import { getStepsStatus } from '../utils/step-validator.js';
 
 /**
  * Descriptions détaillées pour chaque commande
@@ -184,27 +185,67 @@ function getHelpDescription(value) {
 }
 
 /**
- * Menu principal
+ * Génère les choix du menu avec état activé/désactivé selon les prérequis
  */
-const MENU_CHOICES = [
-  new Separator(chalk.cyan.bold('─── PRÉPARATION ───')),
-  { name: '0️⃣  [Étape 0] AutoEdit - Générer tracking IA', value: 'autoedit', description: getHelpDescription('autoedit') },
-  { name: '0️⃣ᵇ [Étape 0bis] Auditer un domaine existant', value: 'audit', description: getHelpDescription('audit') },
-  new Separator(chalk.cyan.bold('─── WORKFLOW TRACKING ───')),
-  { name: '1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)', value: 'init-tracking', description: getHelpDescription('init-tracking') },
-  { name: '2️⃣  [Étape 2] Sélectionner les events (event-setup)', value: 'event-setup', description: getHelpDescription('event-setup') },
-  { name: '3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)', value: 'gtm-config-setup', description: getHelpDescription('gtm-config-setup') },
-  { name: '4️⃣  [Étape 4] Générer tracking.js (generate-tracking)', value: 'generate-tracking', description: getHelpDescription('generate-tracking') },
-  { name: '5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)', value: 'html-layer', description: getHelpDescription('html-layer') },
-  { name: '6️⃣  [Étape 6] Déployer dans GTM (deploy)', value: 'deploy', description: getHelpDescription('deploy') },
-  { name: '6️⃣ᵇ [Étape 6bis] Synchroniser projet → GTM (sync)', value: 'sync', description: getHelpDescription('sync') },
-  { name: '7️⃣  [Étape 7] Vérifier production-ready (verify-tracking)', value: 'verify-tracking', description: getHelpDescription('verify-tracking') },
-  { name: '8️⃣  [Étape 8] Publier GTM en production (publish)', value: 'publish', description: getHelpDescription('publish') },
-  new Separator(chalk.cyan.bold('─── UTILITAIRES ───')),
-  { name: '🧹 Nettoyer GTM (clean)', value: 'clean', description: getHelpDescription('clean') },
-  new Separator(''),
-  { name: '❌ Quitter', value: 'exit' }
-];
+function getMenuChoices() {
+  const status = getStepsStatus();
+
+  // Helper pour créer un choix désactivé
+  const disabled = (name, reason) => ({
+    name: chalk.gray(name),
+    value: 'disabled',
+    disabled: reason
+  });
+
+  return [
+    new Separator(chalk.cyan.bold('─── PRÉPARATION ───')),
+    { name: '0️⃣  [Étape 0] AutoEdit - Générer tracking IA', value: 'autoedit', description: getHelpDescription('autoedit') },
+    { name: '0️⃣ᵇ [Étape 0bis] Auditer un domaine existant', value: 'audit', description: getHelpDescription('audit') },
+
+    new Separator(chalk.cyan.bold('─── WORKFLOW TRACKING ───')),
+    { name: '1️⃣  [Étape 1] Initialiser tracking/ (init-tracking)', value: 'init-tracking', description: getHelpDescription('init-tracking') },
+
+    // Étapes 2-5 : requièrent étape 1
+    status.steps2to5
+      ? { name: '2️⃣  [Étape 2] Sélectionner les events (event-setup)', value: 'event-setup', description: getHelpDescription('event-setup') }
+      : disabled('2️⃣  [Étape 2] Sélectionner les events', 'Requiert: init-tracking'),
+
+    status.steps2to5
+      ? { name: '3️⃣  [Étape 3] Générer config GTM (gtm-config-setup)', value: 'gtm-config-setup', description: getHelpDescription('gtm-config-setup') }
+      : disabled('3️⃣  [Étape 3] Générer config GTM', 'Requiert: init-tracking'),
+
+    status.steps2to5
+      ? { name: '4️⃣  [Étape 4] Générer tracking.js (generate-tracking)', value: 'generate-tracking', description: getHelpDescription('generate-tracking') }
+      : disabled('4️⃣  [Étape 4] Générer tracking.js', 'Requiert: init-tracking'),
+
+    status.steps2to5
+      ? { name: '5️⃣  [Étape 5] Ajouter attributs HTML (html-layer)', value: 'html-layer', description: getHelpDescription('html-layer') }
+      : disabled('5️⃣  [Étape 5] Ajouter attributs HTML', 'Requiert: init-tracking'),
+
+    // Étape 6 : verify-tracking (avant création GTM)
+    status.step6
+      ? { name: '6️⃣  [Étape 6] Vérifier production-ready (verify-tracking)', value: 'verify-tracking', description: getHelpDescription('verify-tracking') }
+      : disabled('6️⃣  [Étape 6] Vérifier production-ready', 'Requiert: gtm-config-setup'),
+
+    // Étapes 7-8 : requièrent verify-tracking
+    status.steps7to8
+      ? { name: '7️⃣  [Étape 7] Créer conteneur GTM (create-gtm-container)', value: 'create-gtm-container', description: getHelpDescription('deploy') }
+      : disabled('7️⃣  [Étape 7] Créer conteneur GTM', 'Requiert: verify-tracking'),
+
+    status.steps7to8
+      ? { name: '7️⃣ᵇ [Étape 7bis] Synchroniser projet → GTM (sync)', value: 'sync', description: getHelpDescription('sync') }
+      : disabled('7️⃣ᵇ [Étape 7bis] Synchroniser projet → GTM', 'Requiert: verify-tracking'),
+
+    status.steps7to8
+      ? { name: '8️⃣  [Étape 8] Publier GTM en production (publish)', value: 'publish', description: getHelpDescription('publish') }
+      : disabled('8️⃣  [Étape 8] Publier GTM en production', 'Requiert: verify-tracking'),
+
+    new Separator(chalk.cyan.bold('─── UTILITAIRES ───')),
+    { name: '🧹 Nettoyer GTM (clean)', value: 'clean', description: getHelpDescription('clean') },
+    new Separator(''),
+    { name: '❌ Quitter', value: 'exit' }
+  ];
+}
 
 export async function interactiveMode() {
   console.clear();
@@ -218,13 +259,18 @@ export async function interactiveMode() {
     try {
       action = await select({
         message: 'Que voulez-vous faire ?',
-        choices: MENU_CHOICES,
+        choices: getMenuChoices(),
         pageSize: 20
       });
     } catch (e) {
       // Ctrl+C
       console.log(chalk.green('\n✨ À bientôt !\n'));
       process.exit(0);
+    }
+
+    // Ignorer les choix désactivés
+    if (action === 'disabled') {
+      continue;
     }
 
     if (action === 'exit') {
@@ -247,8 +293,8 @@ export async function interactiveMode() {
       case 'generate-tracking':
         await handleGenerateTrackingInteractive();
         break;
-      case 'deploy':
-        await handleDeployInteractive();
+      case 'create-gtm-container':
+        await handleCreateGtmContainerInteractive();
         break;
       case 'html-layer':
         await handleHtmlLayerInteractive();
@@ -290,7 +336,7 @@ async function handleAuditInteractive() {
   console.log('');
 }
 
-async function handleDeployInteractive() {
+async function handleCreateGtmContainerInteractive() {
   // Essayer de charger la config locale
   const { existsSync, readFileSync } = await import('fs');
   const { join } = await import('path');
@@ -318,7 +364,7 @@ async function handleDeployInteractive() {
     });
 
     if (useLocal) {
-      await runDeploy({
+      await runCreateGtmContainer({
         domain: localConfig.domain,
         name: localConfig.projectName,
         path: process.cwd()
@@ -338,7 +384,7 @@ async function handleDeployInteractive() {
     default: domain.split('.')[0]
   });
 
-  await runDeploy({ domain, name, path: process.cwd() });
+  await runCreateGtmContainer({ domain, name, path: process.cwd() });
   console.log('');
 }
 

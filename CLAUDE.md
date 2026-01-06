@@ -68,15 +68,28 @@ google-setup init                     # Configure API credentials
 google-setup audit --domains="a.com"  # Audit domains
 
 # Workflow (steps 1-8)
-google-setup init-tracking            # [1] Initialize tracking/ folder
+google-setup init-tracking            # [1] Initialize tracking/ folder + .google-setup.json
 google-setup event-setup              # [2] Select events to track
 google-setup gtm-config-setup         # [3] Generate GTM config
 google-setup generate-tracking        # [4] Generate tracking.js
 google-setup html-layer               # [5] Add data-track attributes
-google-setup deploy --domain="a.com"  # [6] Deploy to GTM
-google-setup verify-tracking          # [7] Verify production-ready
+google-setup verify-tracking          # [6] Verify production-ready (BEFORE creating GTM)
+google-setup create-gtm-container     # [7] Create GTM container + GA4 property
 google-setup publish --domain="a.com" # [8] Publish GTM to production
 ```
+
+## Step Dependencies
+
+Steps are locked until prerequisites are completed:
+
+| Step | Requires | Unlocks |
+|------|----------|---------|
+| 1 (init-tracking) | Nothing | Steps 2-5 |
+| 2-5 | Step 1 (.google-setup.json with projectName + domain) | Step 6 |
+| 6 (verify-tracking) | Step 3 (gtm-config.yaml exists) | Steps 7-8 |
+| 7-8 | Step 6 | - |
+
+**Source of truth**: `.google-setup.json` is created ONLY at step 1 and contains all project configuration.
 
 ## Publish Command (Step 8)
 

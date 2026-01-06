@@ -287,7 +287,7 @@ export async function runGenerateTracking(options) {
   const outputPath = join(projectPath, 'tracking', 'tracking.js');
 
   console.log();
-  console.log(chalk.cyan.bold('📜 [Étape 4/6] Génération de tracking.js'));
+  console.log(chalk.cyan.bold('📜 [Étape 4/8] Génération de tracking.js'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 

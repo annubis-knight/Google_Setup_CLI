@@ -169,7 +169,7 @@ export async function runEventSetup(options) {
   const yamlPath = join(projectPath, 'tracking', 'tracking-events.yaml');
 
   console.log();
-  console.log(chalk.cyan.bold('🎯 [Étape 2/5] Sélection des Events'));
+  console.log(chalk.cyan.bold('🎯 [Étape 2/8] Sélection des Events'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 

@@ -397,9 +397,63 @@ tags:
       - "CE - error_page"
 
 # ============================================
+# BALISES TIERCES
+# ============================================
+  - name: "Contentsquare (Hotjar) - Tracking Code"
+    type: "html"
+    third_party_id: "{{CONTENTSQUARE_TAG_ID}}"
+    html: |
+      <!-- Contentsquare (ex-Hotjar) -->
+      <script>
+      (function () {
+        window._uxa = window._uxa || [];
+        if (typeof CS_CONF === "undefined") {
+          window._uxa.push([
+            "setPath",
+            window.location.pathname + window.location.hash.replace("#", "?__")
+          ]);
+          var mt = document.createElement("script");
+          mt.type = "text/javascript";
+          mt.async = true;
+          mt.src = "//t.contentsquare.net/uxa/{{CONTENTSQUARE_TAG_ID}}.js";
+          document.getElementsByTagName("head")[0].appendChild(mt);
+        } else {
+          window._uxa.push([
+            "trackPageview",
+            window.location.pathname + window.location.hash.replace("#", "?__")
+          ]);
+        }
+      })();
+      </script>
+    triggers:
+      - "All Pages"
+
+  - name: "Meta Pixel - Tracking Code"
+    type: "html"
+    third_party_id: "{{META_PIXEL_ID}}"
+    html: |
+      <!-- Meta Pixel -->
+      <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window,document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '{{META_PIXEL_ID}}');
+      fbq('track', 'PageView');
+      </script>
+      <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id={{META_PIXEL_ID}}&ev=PageView&noscript=1"/></noscript>
+    triggers:
+      - "All Pages"
+
+# ============================================
 # RÉSUMÉ
 # ============================================
 # Variables: 4 (1 constante + 3 DLV)
 # Triggers: 57 (1 pageview + 56 custom events)
-# Tags: 5 (1 Config + 4 Event)
+# Tags: 7 (1 Config + 4 Event + 2 Third-party)
 # ============================================

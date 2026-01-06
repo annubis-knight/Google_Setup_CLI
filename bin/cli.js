@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import { interactiveMode } from '../src/commands/interactive.js';
 import { runAudit } from '../src/commands/audit.js';
-import { runDeploy } from '../src/commands/deploy.js';
+import { runCreateGtmContainer } from '../src/commands/create-gtm-container.js';
 import { runInit } from '../src/commands/init.js';
 import { runSync } from '../src/commands/sync.js';
 import { runInitTracking } from '../src/commands/init-tracking.js';
@@ -35,13 +35,14 @@ program
   .action(runAudit);
 
 program
-  .command('deploy')
-  .description('[Étape 6/7] Déployer la configuration GTM (depuis gtm-config.yaml)')
+  .command('create-gtm-container')
+  .alias('deploy')  // Rétrocompatibilité
+  .description('[Étape 7/8] Créer le conteneur GTM et la propriété GA4')
   .option('-d, --domain <domain>', 'Domaine cible')
   .option('-n, --name <name>', 'Nom du projet')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('--auto', 'Mode automatique sans confirmation')
-  .action(runDeploy);
+  .action(runCreateGtmContainer);
 
 program
   .command('sync')
@@ -52,44 +53,44 @@ program
   .action(runSync);
 
 // ============================================
-// WORKFLOW TRACKING (Étapes 1-7)
+// WORKFLOW TRACKING (Étapes 1-8)
 // ============================================
 
 program
   .command('init-tracking')
-  .description('[Étape 1/7] Initialiser le dossier tracking/ avec events + rules')
+  .description('[Étape 1/8] Initialiser le dossier tracking/ avec events + rules')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('--force', 'Écraser les fichiers existants')
   .action(runInitTracking);
 
 program
   .command('event-setup')
-  .description('[Étape 2/7] Sélectionner les events à tracker')
+  .description('[Étape 2/8] Sélectionner les events à tracker')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runEventSetup);
 
 program
   .command('gtm-config-setup')
-  .description('[Étape 3/7] Générer gtm-config.yaml depuis tracking-events.yaml')
+  .description('[Étape 3/8] Générer gtm-config.yaml depuis tracking-events.yaml')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runGtmConfigSetup);
 
 program
   .command('generate-tracking')
-  .description('[Étape 4/7] Générer tracking.js depuis tracking-events.yaml')
+  .description('[Étape 4/8] Générer tracking.js depuis tracking-events.yaml')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runGenerateTracking);
 
 program
   .command('html-layer')
-  .description('[Étape 5/7] Ajouter les attributs data-track au HTML')
+  .description('[Étape 5/8] Ajouter les attributs data-track au HTML')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .option('-s, --source <path>', 'Chemin des fichiers HTML (défaut: même que path)')
   .action(runHtmlLayer);
 
 program
   .command('verify-tracking')
-  .description('[Étape 7/8] Vérifier que tout le setup tracking est complet')
+  .description('[Étape 6/8] Vérifier que tout le setup tracking est complet')
   .option('-p, --path <path>', 'Chemin du projet (défaut: répertoire courant)')
   .action(runVerifyTracking);
 

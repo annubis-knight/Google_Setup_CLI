@@ -51,7 +51,7 @@ export async function runInitTracking(options) {
   const force = options.force || false;
 
   console.log();
-  console.log(chalk.cyan.bold('📋 [Étape 1/5] Initialisation du Tracking'));
+  console.log(chalk.cyan.bold('📋 [Étape 1/8] Initialisation du Tracking'));
   console.log(chalk.gray('─'.repeat(50)));
   console.log();
 
@@ -159,6 +159,50 @@ export async function runInitTracking(options) {
 
     writeFileSync(eventsPath, eventsContent);
     console.log(chalk.green(`   ✓ ${outputDir}/tracking-events.yaml (56 events)`));
+
+    // === Toujours créer/mettre à jour .google-setup.json ===
+    const configPath = join(projectPath, '.google-setup.json');
+    let existingConfig = {};
+    if (existsSync(configPath)) {
+      try {
+        existingConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+      } catch (e) {
+        // Fichier corrompu, on repart de zéro
+      }
+    }
+
+    const newConfig = {
+      ...existingConfig,
+      version: existingConfig.version || '2.0.0',
+      projectName: projectName,
+      domain: domain,
+      createdAt: existingConfig.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // GA4 (uniquement si fourni ou existant)
+    if (ga4Id || existingConfig.ga4?.measurementId) {
+      newConfig.ga4 = {
+        ...existingConfig.ga4,
+        measurementId: ga4Id || existingConfig.ga4?.measurementId
+      };
+    }
+
+    // GTM (uniquement si fourni ou existant)
+    if (gtmId || existingConfig.gtm?.containerId) {
+      newConfig.gtm = {
+        ...existingConfig.gtm,
+        containerId: gtmId || existingConfig.gtm?.containerId
+      };
+    }
+
+    // Préserver thirdParty existant
+    if (existingConfig.thirdParty) {
+      newConfig.thirdParty = existingConfig.thirdParty;
+    }
+
+    writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
+    console.log(chalk.green('   ✓ .google-setup.json (source de vérité)'));
 
     // 2. Charger et déployer tracking-rules.yaml
     const rulesContent = loadTemplate('tracking-rules.yaml');
